@@ -5,12 +5,26 @@ import torch.nn as nn
 import torch.distributed as dist
 import yacs.config
 
+from torchvision import models
+
 
 def create_model(config: yacs.config.CfgNode) -> nn.Module:
-    module = importlib.import_module(
-        'pytorch_image_classification.models'
-        f'.{config.model.type}.{config.model.name}')
-    model = getattr(module, 'Network')(config)
+    if config.model.pretrain:
+        if config.model.pretrain_pth is not None:
+            model = models.resnet34(pretrained=False)
+            model.load_state_dict(torch.load(config.model.pretrain_pth))
+        elif config.model.name.startswith("resnet34"):
+            model = models.resnet34(pretrained=True)
+            model.avgpool = nn.AdaptiveAvgPool2d(1)
+            model.fc = nn.Linear(512, config.num_classes)
+        else:
+            raise Exception('pretrain model not aviliable')
+            
+    else:
+        module = importlib.import_module(
+            'pytorch_image_classification.models'
+            f'.{config.model.type}.{config.model.name}')
+        model = getattr(module, 'Network')(config)
     device = torch.device(config.device)
     model.to(device)
     return model

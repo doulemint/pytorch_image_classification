@@ -4,10 +4,11 @@ import argparse
 import pathlib
 import time
 
-try:
-    import apex
-except ImportError:
-    pass
+
+# try:
+#     import apex
+# except ImportError:
+#     pass
 import numpy as np
 import torch
 import torch.nn as nn
