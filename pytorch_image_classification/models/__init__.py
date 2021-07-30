@@ -13,10 +13,11 @@ def create_model(config: yacs.config.CfgNode) -> nn.Module:
         if config.model.pretrain_pth is not None:
             model = models.resnet34(pretrained=False)
             model.load_state_dict(torch.load(config.model.pretrain_pth))
+            model.fc = nn.Linear(512, config.dataset.n_classes)
         elif config.model.name.startswith("resnet34"):
             model = models.resnet34(pretrained=True)
             model.avgpool = nn.AdaptiveAvgPool2d(1)
-            model.fc = nn.Linear(512, config.num_classes)
+            model.fc = nn.Linear(512, config.dataset.n_classes)
         else:
             raise Exception('pretrain model not aviliable')
             

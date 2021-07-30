@@ -20,6 +20,8 @@ config.model = ConfigNode()
 # Use 'cifar' for small input images
 config.model.type = 'cifar'
 config.model.name = 'resnet_preact'
+config.model.pretrain = False
+config.model.pretrain_pth = 'pretrain_models/resnet34-333f7ec4.pth'
 config.model.init_mode = 'kaiming_fan_out'
 
 config.model.vgg = ConfigNode()
