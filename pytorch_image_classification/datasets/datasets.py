@@ -123,8 +123,8 @@ def create_dataset(config: yacs.config.CfgNode,
             train_df, valid_df = train_test_split(df, stratify=df["label"].values)
             train_transform = create_transform(config, is_train=True)
             val_transform = create_transform(config, is_train=False)
-            train_ds = Data(train_df, train_transform)
-            valid_ds = Data(valid_df, val_transform)
+            train_ds = Data(train_df, config,train_transform)
+            valid_ds = Data(valid_df,config, val_transform)
             return train_ds, valid_ds
         else:
            raise ValueError() 
