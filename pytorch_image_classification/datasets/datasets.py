@@ -111,7 +111,7 @@ def create_dataset(config: yacs.config.CfgNode,
                                                         transform=val_transform)
             return train_dataset, val_dataset
         elif config.dataset.type == 'df':
-            df = pd.read_csv(config.dataset.cvsfile)
+            df = pd.read_csv(config.dataset.cvsfile_train)
             label_map={}
             if config.dataset.jsonfile:
                 with open(config.dataset.jsonfile, "r") as f:
@@ -119,9 +119,13 @@ def create_dataset(config: yacs.config.CfgNode,
             else:
                 label_map = getLabelmap(df['label'])
                 label_map = {int(v): k for k, v in label_map.items()}
+            if config.dataset.cvsfile_test:
+                df_train = pd.read_csv(config.dataset.cvsfile_train)
+                df_test = pd.read_csv(config.dataset.cvsfile_test)
+            else:
+                train_df, valid_df = train_test_split(df, stratify=df["label"].values)
+                train_transform = create_transform(config, is_train=True)
             label_map = {int(k): v for k, v in label_map.items()}
-            train_df, valid_df = train_test_split(df, stratify=df["label"].values)
-            train_transform = create_transform(config, is_train=True)
             val_transform = create_transform(config, is_train=False)
             train_ds = Data(train_df, config,train_transform)
             valid_ds = Data(valid_df,config, val_transform)

@@ -1,7 +1,8 @@
 dataset:
   type: df
   name: ImageNet
-  cvsfile: '/kaggle/input/cassava-leaf-disease-classification/train.csv'
+  cvsfile_train: '/kaggle/input/cassava-leaf-disease-classification/train.csv'
+  cvsfile_test: None
   jsonfile: '/kaggle/input/cassava-leaf-disease-classification/label_num_to_disease_map.json'
   dataset_dir: '/kaggle/input/cassava-leaf-disease-classification/train_images'
   image_size: 224
