@@ -1,17 +1,17 @@
 dataset:
   type: df
   name: ImageNet
-  cvsfile: None
-  jsonfile: None
-  dataset_dir: '/data/nextcloud/dbc2017/files/images'
+  cvsfile: '/kaggle/input/cassava-leaf-disease-classification/train.csv'
+  jsonfile: '/kaggle/input/cassava-leaf-disease-classification/label_num_to_disease_map.json'
+  dataset_dir: '/kaggle/input/cassava-leaf-disease-classification/train_images'
   image_size: 224
   n_channels: 3
   n_classes: 50
 model:
   type: imagenet
-  name: resnet34
+  name: efficientnet-b0
   pretrain: True
-  pretrain_pth: 'pretrain_models/resnet34-333f7ec4.pth'
+  pretrain_pth: None
 augmentation:
   use_random_crop: True
   use_random_horizontal_flip: True
@@ -27,9 +27,14 @@ tta:
   use_center_crop: True
   resize: 256
 train:
-  output_dir: experiments/imagenet/resnet34/exp01
+  output_dir: experiments/imagenet/efficientnet-b0/exp01
   use_apex: False
   batch_size: 8
+scheduler:
+  epochs: 20
+  type: multistep
+  milestones: [10, 20]
+  lr_decay: 0.0001
 validation:
   batch_size: 8
 
