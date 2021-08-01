@@ -1,6 +1,8 @@
 dataset:
-  type: dir
+  type: df
   name: ImageNet
+  cvsfile: None
+  jsonfile: None
   dataset_dir: '/data/nextcloud/dbc2017/files/images'
   image_size: 224
   n_channels: 3
