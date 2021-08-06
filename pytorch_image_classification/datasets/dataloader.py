@@ -7,13 +7,39 @@ import yacs.config
 
 from torch.utils.data import DataLoader
 
+from pytorch_image_classification import create_transform
 from pytorch_image_classification import create_collator
 from pytorch_image_classification.datasets import create_dataset
+from .datasets import MyDataset,get_files
 
 
 def worker_init_fn(worker_id: int) -> None:
     np.random.seed(np.random.get_state()[1][0] + worker_id)
 
+def prepare_dataloader(df, trn_idx, val_idx,config, data_root='../classify-leaves/'):
+
+    train_ = df.loc[trn_idx,:].reset_index(drop=True)
+    valid_ = df.loc[val_idx,:].reset_index(drop=True)
+        
+    train_ds = MyDataset(train_, data_root, transforms=create_transform(config, is_train=True), output_label=True)
+    valid_ds = MyDataset(valid_, data_root, transforms=create_transform(config, is_train=False), output_label=True)
+    
+    train_loader = torch.utils.data.DataLoader(
+        train_ds,
+        batch_size=config.train.batch_size,
+        pin_memory=config.train.dataloader.pin_memory,
+        drop_last=False,
+        shuffle=True,        
+        num_workers=config.train.dataloader.num_workers,
+    )
+    val_loader = torch.utils.data.DataLoader(
+        valid_ds, 
+        batch_size=config.validation.batch_size,
+        num_workers=config.train.dataloader.num_workers,
+        shuffle=False,
+        pin_memory=config.train.dataloader.pin_memory,
+    )
+    return train_loader, val_loader
 
 def create_dataloader(
         config: yacs.config.CfgNode,
@@ -59,7 +85,11 @@ def create_dataloader(
 
         return train_loader, val_loader
     else:
-        dataset = create_dataset(config, is_train)
+        if config.train.use_kfold:
+            data_root = config.dataset.dataset_dir+'val/'
+            dataset = MyDataset(get_files(data_root,'train'), data_root, transforms=create_transform(config, is_train=False), output_label=True)
+        else:
+            dataset = create_dataset(config, is_train)
         if dist.is_available() and dist.is_initialized():
             sampler = torch.utils.data.distributed.DistributedSampler(dataset)
         else:
@@ -68,8 +98,9 @@ def create_dataloader(
             dataset,
             batch_size=config.test.batch_size,
             num_workers=config.test.dataloader.num_workers,
-            sampler=sampler,
+            # sampler=sampler,
             shuffle=False,
             drop_last=False,
             pin_memory=config.test.dataloader.pin_memory)
+                
         return test_loader

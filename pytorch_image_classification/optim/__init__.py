@@ -37,7 +37,11 @@ def create_optimizer(config, model):
     elif config.train.optimizer == 'adam':
         optimizer = torch.optim.Adam(params,
                                      lr=config.train.base_lr,
-                                     betas=config.optim.adam.betas)
+                                     betas=config.optim.adam.weight_decay)
+    elif config.train.optimizer == 'admw':
+        optimizer = torch.optim.AdamW(model.parameters(), 
+                                      lr=config.train.base_lr, 
+                                      weight_decay=config.train.weight_decay)
     elif config.train.optimizer == 'amsgrad':
         optimizer = torch.optim.Adam(params,
                                      lr=config.train.base_lr,

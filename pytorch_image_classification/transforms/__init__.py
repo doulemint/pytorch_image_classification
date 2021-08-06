@@ -4,15 +4,40 @@ import numpy as np
 import torchvision
 import yacs.config
 
-from .transforms import (
-    CenterCrop,
-    Normalize,
-    RandomCrop,
-    RandomHorizontalFlip,
-    RandomResizeCrop,
-    Resize,
-    ToTensor,
+# from .transforms import (
+#     # CenterCrop,
+#     Normalize,
+#     RandomCrop,
+#     RandomHorizontalFlip,
+#     RandomResizeCrop,
+#     # Resize,
+#     ToTensor,
+# ) as (
+#     tCenterCrop,
+#     tNormalize,
+#     tRandomCrop,
+#     tRandomHorizontalFlip,
+#     tRandomResizeCrop,
+#     tResize,
+#     tToTensor,
+# )
+from .transforms import Resize as tResize
+from .transforms import CenterCrop as tCenterCrop
+from .transforms import Normalize as tNormalize
+from .transforms import Resize as tResize
+from .transforms import ToTensor as tToTensor
+from .transforms import RandomCrop as tRandomCrop
+from .transforms import RandomResizeCrop as tRandomResizeCrop
+from .transforms import RandomHorizontalFlip as tRandomHorizontalFlip
+from .transforms import StepCrop
+
+
+from albumentations import (
+    HorizontalFlip, VerticalFlip, Rotate, ShiftScaleRotate, RandomBrightnessContrast, Perspective, CLAHE, 
+    Transpose, Blur, OpticalDistortion, GridDistortion, HueSaturationValue, ColorJitter, GaussNoise, MotionBlur, MedianBlur,
+    Emboss, Sharpen, Flip, OneOf, SomeOf, Compose, Normalize, CoarseDropout, CenterCrop, GridDropout, Resize
 )
+from albumentations.pytorch import ToTensorV2
 
 from .cutout import Cutout, DualCutout
 from .random_erasing import RandomErasing
@@ -62,11 +87,11 @@ def create_cifar_transform(config: yacs.config.CfgNode,
     if is_train:
         transforms = []
         if config.augmentation.use_random_crop:
-            transforms.append(RandomCrop(config))
+            transforms.append(tRandomCrop(config))
         if config.augmentation.use_random_horizontal_flip:
-            transforms.append(RandomHorizontalFlip(config))
+            transforms.append(tRandomHorizontalFlip(config))
 
-        transforms.append(Normalize(mean, std))
+        transforms.append(tNormalize(mean, std))
 
         if config.augmentation.use_cutout:
             transforms.append(Cutout(config))
@@ -75,11 +100,11 @@ def create_cifar_transform(config: yacs.config.CfgNode,
         if config.augmentation.use_dual_cutout:
             transforms.append(DualCutout(config))
 
-        transforms.append(ToTensor())
+        transforms.append(tToTensor())
     else:
         transforms = [
-            Normalize(mean, std),
-            ToTensor(),
+            tNormalize(mean, std),
+            tToTensor(),
         ]
 
     return torchvision.transforms.Compose(transforms)
@@ -90,14 +115,32 @@ def create_imagenet_transform(config: yacs.config.CfgNode,
     mean, std = _get_dataset_stats(config)
     if is_train:
         transforms = []
-        if config.augmentation.use_random_crop:
-            transforms.append(RandomResizeCrop(config))
-        else:
-            transforms.append(CenterCrop(config))
-        if config.augmentation.use_random_horizontal_flip:
-            transforms.append(RandomHorizontalFlip(config))
+        if config.augmentation.use_albumentations:
+            return Compose([
+            OneOf([
+            CoarseDropout(p=0.5),
+            GaussNoise(),
+            ], p=0.5),
+            SomeOf([
+            Transpose(p=0.5),
+            HorizontalFlip(p=0.5),
+            VerticalFlip(p=0.5),
+            ShiftScaleRotate(p=0.5),
+            HueSaturationValue(hue_shift_limit=0.2, sat_shift_limit=0.2, val_shift_limit=0.2, p=0.5),
+            RandomBrightnessContrast(brightness_limit=(-0.1,0.1), contrast_limit=(-0.1, 0.1), p=0.5),
+            ], n=3, p=0.6),
+            Resize(config.dataset.image_size, config.dataset.image_size),
+            Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225], max_pixel_value=255.0, p=1.0),
+            ToTensorV2(p=1.0),], p=1.0)
 
-        transforms.append(Normalize(mean, std))
+        if config.augmentation.use_random_crop:
+            transforms.append(tRandomResizeCrop(config))
+        else:
+            transforms.append(tCenterCrop(config))
+        if config.augmentation.use_random_horizontal_flip:
+            transforms.append(tRandomHorizontalFlip(config))
+
+        transforms.append(tNormalize(mean, std))
 
         if config.augmentation.use_cutout:
             transforms.append(Cutout(config))
@@ -105,17 +148,23 @@ def create_imagenet_transform(config: yacs.config.CfgNode,
             transforms.append(RandomErasing(config))
         if config.augmentation.use_dual_cutout:
             transforms.append(DualCutout(config))
-
-        transforms.append(ToTensor())
+        if config.augmentation.use_step_crop:
+            transforms.append(StepCrop())
+        transforms.append(tToTensor())
     else:
+        if config.augmentation.use_albumentations:
+            return Compose([
+            Resize(config.dataset.image_size, config.dataset.image_size),
+            Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225], max_pixel_value=255.0, p=1.0),
+            ToTensorV2(p=1.0),], p=1.)
         transforms = []
         if config.tta.use_resize:
-            transforms.append(Resize(config))
+            transforms.append(tResize(config))
         if config.tta.use_center_crop:
-            transforms.append(CenterCrop(config))
+            transforms.append(tCenterCrop(config))
         transforms += [
-            Normalize(mean, std),
-            ToTensor(),
+            tNormalize(mean, std),
+            tToTensor(),
         ]
 
     return torchvision.transforms.Compose(transforms)

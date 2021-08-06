@@ -59,6 +59,13 @@ def _create_main_scheduler(config, main_steps):
 
 
 def create_scheduler(config, optimizer, steps_per_epoch):
+    if config.scheduler.type == 'CosineAnnealing':
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+                            optimizer, 
+                            T_0=config.scheduler.T0, 
+                            T_mult=config.scheduler.T_mul, eta_min=config.scheduler.lr_min_factor, last_epoch=-1)
+        return scheduler
+
     warmup_epochs = config.scheduler.warmup.epochs
     main_epochs = config.scheduler.epochs - warmup_epochs
 

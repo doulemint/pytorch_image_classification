@@ -14,6 +14,9 @@ import torch
 import torch.nn as nn
 import torch.distributed as dist
 import torchvision
+#1
+from sklearn.metrics import accuracy_score
+from sklearn.model_selection import StratifiedKFold
 
 from fvcore.common.checkpoint import Checkpointer
 
@@ -22,8 +25,10 @@ from pytorch_image_classification import (
     create_dataloader,
     create_loss,
     create_model,
+    get_files,
     create_optimizer,
     create_scheduler,
+    prepare_dataloader,
     get_default_config,
     update_config,
 )
@@ -61,6 +66,8 @@ def load_config():
     if not torch.cuda.is_available():
         config.device = 'cpu'
         config.train.dataloader.pin_memory = False
+    if not config.train.use_kfold:
+        config.train.fold_num = 1
     if args.resume != '':
         config_path = pathlib.Path(args.resume) / 'config.yaml'
         config.merge_from_file(config_path.as_posix())
@@ -117,6 +124,7 @@ def train(epoch, config, model, optimizer, scheduler, loss_func, train_loader,
 
     loss_meter = AverageMeter()
     acc1_meter = AverageMeter()
+    # sk_acc1_meter = AverageMeter()
     acc5_meter = AverageMeter()
     start = time.time()
     for step, (data, targets) in enumerate(train_loader):
@@ -178,6 +186,7 @@ def train(epoch, config, model, optimizer, scheduler, loss_func, train_loader,
                                       targets,
                                       augmentation=True,
                                       topk=(1, 5))
+        # sk_acc1=accuracy_score(targets.detach().cpu().numpy(), outputs.detach().cpu().numpy())
 
         loss = sum(losses)
         if config.train.distributed:
@@ -203,6 +212,7 @@ def train(epoch, config, model, optimizer, scheduler, loss_func, train_loader,
         num = data.size(0)
         loss_meter.update(loss, num)
         acc1_meter.update(acc1, num)
+        # sk_acc1_meter.update(sk_acc1,num)
         acc5_meter.update(acc5, num)
 
         if torch.cuda.is_available():
@@ -216,6 +226,7 @@ def train(epoch, config, model, optimizer, scheduler, loss_func, train_loader,
                     f'Step {step}/{len(train_loader)} '
                     f'lr {scheduler.get_last_lr()[0]:.6f} '
                     f'loss {loss_meter.val:.4f} ({loss_meter.avg:.4f}) '
+                    # f'sk_acc@1 {sk_acc1_meter.val:.4f} ({sk_acc1_meter.avg:.4f}) '
                     f'acc@1 {acc1_meter.val:.4f} ({acc1_meter.avg:.4f}) '
                     f'acc@5 {acc5_meter.val:.4f} ({acc5_meter.avg:.4f})')
 
@@ -313,6 +324,7 @@ def validate(epoch, config, model, loss_func, val_loader, logger,
 
         elapsed = time.time() - start
         logger.info(f'Elapsed {elapsed:.2f}')
+        
 
     if get_rank() == 0:
         if epoch > 0:
@@ -320,6 +332,88 @@ def validate(epoch, config, model, loss_func, val_loader, logger,
         tensorboard_writer.add_scalar('Val/Acc1', acc1_meter.avg, epoch)
         tensorboard_writer.add_scalar('Val/Acc5', acc5_meter.avg, epoch)
         tensorboard_writer.add_scalar('Val/Time', elapsed, epoch)
+        if config.tensorboard.model_params:
+            for name, param in model.named_parameters():
+                tensorboard_writer.add_histogram(name, param, epoch)
+    return acc1_meter.avg
+
+def test(epoch, config, model, loss_func, val_loader, logger,
+             tensorboard_writer):
+    logger.info(f'Test {epoch}')
+
+    device = torch.device(config.device)
+
+    model.eval()
+
+    loss_meter = AverageMeter()
+    acc1_meter = AverageMeter()
+    acc5_meter = AverageMeter()
+    start = time.time()
+    with torch.no_grad():
+        for step, (data, targets) in enumerate(val_loader):
+            if get_rank() == 0:
+                if config.tensorboard.val_images:
+                    if epoch == 0 and step == 0:
+                        image = torchvision.utils.make_grid(data,
+                                                            normalize=True,
+                                                            scale_each=True)
+                        tensorboard_writer.add_image('Test/Image', image, epoch)
+
+            data = data.to(
+                device, non_blocking=config.validation.dataloader.non_blocking)
+            targets = targets.to(device)
+
+            outputs = model(data)
+            loss = loss_func(outputs, targets)
+
+            acc1, acc5 = compute_accuracy(config,
+                                          outputs,
+                                          targets,
+                                          augmentation=False,
+                                          topk=(1, 5))
+
+            if config.train.distributed:
+                loss_all_reduce = dist.all_reduce(loss,
+                                                  op=dist.ReduceOp.SUM,
+                                                  async_op=True)
+                acc1_all_reduce = dist.all_reduce(acc1,
+                                                  op=dist.ReduceOp.SUM,
+                                                  async_op=True)
+                acc5_all_reduce = dist.all_reduce(acc5,
+                                                  op=dist.ReduceOp.SUM,
+                                                  async_op=True)
+                loss_all_reduce.wait()
+                acc1_all_reduce.wait()
+                acc5_all_reduce.wait()
+                loss.div_(dist.get_world_size())
+                acc1.div_(dist.get_world_size())
+                acc5.div_(dist.get_world_size())
+            loss = loss.item()
+            acc1 = acc1.item()
+            acc5 = acc5.item()
+
+            num = data.size(0)
+            loss_meter.update(loss, num)
+            acc1_meter.update(acc1, num)
+            acc5_meter.update(acc5, num)
+
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
+
+        logger.info(f'Epoch {epoch} '
+                    f'loss {loss_meter.avg:.4f} '
+                    f'acc@1 {acc1_meter.avg:.4f} '
+                    f'acc@5 {acc5_meter.avg:.4f}')
+
+        elapsed = time.time() - start
+        logger.info(f'Elapsed {elapsed:.2f}')
+
+    if get_rank() == 0:
+        if epoch > 0:
+            tensorboard_writer.add_scalar('Test/Loss', loss_meter.avg, epoch)
+        tensorboard_writer.add_scalar('Test/Acc1', acc1_meter.avg, epoch)
+        tensorboard_writer.add_scalar('Test/Acc5', acc5_meter.avg, epoch)
+        tensorboard_writer.add_scalar('Test/Time', elapsed, epoch)
         if config.tensorboard.model_params:
             for name, param in model.named_parameters():
                 tensorboard_writer.add_histogram(name, param, epoch)
@@ -363,7 +457,16 @@ def main():
     logger.info(config)
     logger.info(get_env_info(config))
 
-    train_loader, val_loader = create_dataloader(config, is_train=True)
+    # folds=[]
+    if config.train.use_kfold==False:
+        train_loader, val_loader = create_dataloader(config, is_train=True)
+        # config.train.fold_num = 1
+        # folds=[1]
+    else:
+        train_clean = get_files(config.dataset.dataset_dir+'train/','train')
+        folds = StratifiedKFold(n_splits=config.train.fold_num, shuffle=True, random_state=config.train.seed).split(train_clean['filename'],train_clean['label'])
+        test_loader = create_dataloader(config,is_train=False)
+
 
     model = create_model(config)
     macs, n_params = count_op(config, model)
@@ -376,9 +479,14 @@ def main():
             model, optimizer, opt_level=config.train.precision)
     model = apply_data_parallel_wrapper(config, model)
 
-    scheduler = create_scheduler(config,
+    if config.train.use_kfold:
+      scheduler =create_scheduler(config,
                                  optimizer,
-                                 steps_per_epoch=len(train_loader))
+                                 steps_per_epoch=len(train_clean))
+    else:
+      scheduler = create_scheduler(config,
+                                  optimizer,
+                                  steps_per_epoch=len(train_loader))
     checkpointer = Checkpointer(model,
                                 optimizer=optimizer,
                                 scheduler=scheduler,
@@ -415,35 +523,59 @@ def main():
 
     if (config.train.val_period > 0 and start_epoch == 0
             and config.train.val_first):
-        validate(0, config, model, val_loss, val_loader, logger,
+        if not config.train.use_kfold:
+          _=validate(0, config, model, val_loss, val_loader, logger,
                  tensorboard_writer)
+    #add kfold
+    best_acc=0
+    for fold in range(config.train.fold_num):
+        logger.info(f'folds {fold}')
+        # for fold, (trn_idx, val_idx) in enumerate(folds):
+        if config.train.use_kfold:
+            trn_idx, val_idx = next(folds)
+            train_loader, val_loader = prepare_dataloader(train_clean, trn_idx, val_idx,config, data_root=config.dataset.dataset_dir)
+        for epoch, seed in enumerate(epoch_seeds[start_epoch:], start_epoch):
+            epoch += 1
 
-    for epoch, seed in enumerate(epoch_seeds[start_epoch:], start_epoch):
-        epoch += 1
+            np.random.seed(seed)
+            train(epoch, config, model, optimizer, scheduler, train_loss,
+                train_loader, logger, tensorboard_writer, tensorboard_writer2)
 
-        np.random.seed(seed)
-        train(epoch, config, model, optimizer, scheduler, train_loss,
-              train_loader, logger, tensorboard_writer, tensorboard_writer2)
+            if config.train.val_period > 0 and (epoch % config.train.val_period
+                                                == 0):
+                acc1=validate(epoch, config, model, val_loss, val_loader, logger,
+                        tensorboard_writer)
+                if config.train.use_kfold:
+                    test(epoch, config, model, val_loss, test_loader, logger, tensorboard_writer)
 
-        if config.train.val_period > 0 and (epoch % config.train.val_period
-                                            == 0):
-            validate(epoch, config, model, val_loss, val_loader, logger,
-                     tensorboard_writer)
+            tensorboard_writer.flush()
+            tensorboard_writer2.flush()
 
-        tensorboard_writer.flush()
-        tensorboard_writer2.flush()
-
-        if (epoch % config.train.checkpoint_period
-                == 0) or (epoch == config.scheduler.epochs):
-            checkpoint_config = {
-                'epoch': epoch,
-                'global_step': global_step,
-                'config': config.as_dict(),
-            }
-            checkpointer.save(f'checkpoint_{epoch:05d}', **checkpoint_config)
+            
+            if (((epoch % config.train.checkpoint_period
+                    == 0) or (epoch == config.scheduler.epochs)and acc1>best_acc) or acc1>best_acc):
+                if config.train.use_kfold:
+                    checkpoint_config = {
+                        'epoch': epoch,
+                        'fold':fold,
+                        'global_step': global_step,
+                        'config': config.as_dict(),
+                    }
+                else:
+                    checkpoint_config = {
+                        'epoch': epoch,
+                        'global_step': global_step,
+                        'config': config.as_dict(),
+                    }
+                print("improve {} from {} save checkpoint!".format(best_acc,acc1))
+                best_acc = acc1
+                checkpointer.save(f'checkpoint_{epoch:05d}', **checkpoint_config)
 
     tensorboard_writer.close()
     tensorboard_writer2.close()
+
+    #inference
+    # 
 
 
 if __name__ == '__main__':

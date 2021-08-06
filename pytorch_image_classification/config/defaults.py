@@ -92,10 +92,16 @@ config.model.se_resnet_preact.remove_first_relu = False
 config.model.se_resnet_preact.add_last_bn = False
 config.model.se_resnet_preact.preact_stage = [True, True, True]
 
+config.model.vit = ConfigNode()
+config.model.vit.pretrain = True
+config.model.vit.load_checkpoint = None
+
 config.train = ConfigNode()
 config.train.checkpoint = ''
 config.train.resume = False
 config.train.use_apex = True
+config.train.use_kfold = False
+config.train.fold_num = 1
 # optimization level for NVIDIA apex
 # O0 = fp32
 # O1 = mixed precision
@@ -159,7 +165,7 @@ config.scheduler.milestones = [80, 120]
 config.scheduler.lr_decay = 0.1
 config.scheduler.lr_min_factor = 0.001
 config.scheduler.T0 = 10
-config.scheduler.T_mul = 1.
+config.scheduler.T_mul = 1 #sometime it needs to be integar/fraction
 
 # train data loader
 config.train.dataloader = ConfigNode()
@@ -188,6 +194,7 @@ config.train.dist.local_rank = 0
 config.train.dist.use_sync_bn = False
 
 config.augmentation = ConfigNode()
+config.augmentation.use_albumentations = False
 config.augmentation.use_random_crop = True
 config.augmentation.use_random_horizontal_flip = True
 config.augmentation.use_cutout = False
@@ -197,6 +204,7 @@ config.augmentation.use_mixup = False
 config.augmentation.use_ricap = False
 config.augmentation.use_cutmix = False
 config.augmentation.use_label_smoothing = False
+config.augmentation.use_step_crop = False
 
 config.augmentation.random_crop = ConfigNode()
 config.augmentation.random_crop.padding = 4

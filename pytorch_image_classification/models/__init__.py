@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.distributed as dist
 import yacs.config
 import timm
+import tensorflow as tf
 
 from torchvision import models
 from pretrainedmodels import models as pm
@@ -96,7 +97,7 @@ def get_model(configs,feature_extract=False):
         set_parameter_requires_grad(model, feature_extract)
         model.classifier = nn.Linear(model.classifier.in_features, configs.dataset.n_classes)
     elif configs.model.name.startswith("efficientnet-b5"):
-        model = timm.create_model('tf_efficientnet_b5_ns', pretrained=True, num_classes=configs.dataset.n_classes, drop_path_rate=configs.drop_out_rate)
+        model = timm.create_model('tf_efficientnet_b5_ns', pretrained=True, num_classes=configs.dataset.n_classes, drop_path_rate=0.2)
         set_parameter_requires_grad(model, feature_extract)
         model.classifier = nn.Linear(model.classifier.in_features, configs.dataset.n_classes)
     elif configs.model.name.startswith("vit_base_patch16_384"):
@@ -111,6 +112,18 @@ def get_model(configs,feature_extract=False):
         model = timm.create_model('vit_base_resnet50_384', pretrained=True, num_classes=configs.dataset.n_classes)
         set_parameter_requires_grad(model, feature_extract)
         model.head = nn.Linear(model.head.in_features, configs.dataset.n_classes)
+
+    ######AugReg series
+    elif configs.model.name.startswith('vit_large_r50_s32_384'):
+        model = timm.create_model('vit_large_r50_s32_384', num_classes=configs.dataset.n_classes)
+        if configs.model.vit.load_checkpoint != None:
+            filename = configs.model.vit.load_checkpoint
+        # Non-default checkpoints need to be loaded from local files.
+            if not tf.io.gfile.exists(f'{filename}.npz'):
+                tf.io.gfile.copy(f'gs://vit_models/augreg/{filename}.npz', f'{filename}.npz')
+            timm.models.load_checkpoint(model, f'{filename}.npz')
+            set_parameter_requires_grad(model, feature_extract)
+            model.head = nn.Linear(model.head.in_features, configs.dataset.n_classes)
 
     elif configs.model.name == 'shufflenetv2_x0_5':  # clw modify
         model = models.shufflenet_v2_x0_5(pretrained=True)  # clw modify
