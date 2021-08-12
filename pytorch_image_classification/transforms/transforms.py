@@ -65,7 +65,7 @@ class Resize:
         return self.transform(data)
 
 class StepCrop:
-    def __init__(self, config: yacs.config.CfgNode):
+    def __init__(self):
         pass
 
     def __call__(self, data: PIL.Image.Image) -> PIL.Image.Image:

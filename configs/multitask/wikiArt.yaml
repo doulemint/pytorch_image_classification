@@ -1,12 +1,12 @@
 dataset:
   type: df
   name: ImageNet
-  dataset_dir: '/content/wiki22'
+  dataset_dir: '/content/images'
   image_size: 224
   n_channels: 3
   n_classes: [23,7,27]
-  cvsfile_train: '/content/artist_train.csv'
-  cvsfile_test: '/content/artist_val.csv'
+  cvsfile_train: '/content/MultitaskPainting100k_Dataset_groundtruth/groundtruth_multiloss_train_header.csv'
+  cvsfile_test: '/content/MultitaskPainting100k_Dataset_groundtruth/groundtruth_multiloss_train_header.csv'
 model:
   type: imagenet
   name: efficientnet-b5
@@ -34,7 +34,7 @@ scheduler:
   epochs: 10
   T0: 10
 train:
-  output_dir: experiments/wiki22/efficientnet-b5/exp00
+  output_dir: experiments/K100/efficientnet-b5/exp00
   use_apex: False
   batch_size: 32
   seed: 123

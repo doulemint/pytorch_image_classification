@@ -15,7 +15,8 @@ config.dataset.image_size = 32
 config.dataset.n_channels = 3
 config.dataset.n_classes = 10
 config.dataset.type = 'dir'
-config.dataset.cvsfile = None
+config.dataset.cvsfile_train = None
+config.dataset.cvsfile_test = None
 config.dataset.jsonfile = None
 
 config.model = ConfigNode()
@@ -26,6 +27,7 @@ config.model.name = 'resnet_preact'
 config.model.pretrain = False
 config.model.pretrain_pth = 'pretrain_models/resnet34-333f7ec4.pth'
 config.model.init_mode = 'kaiming_fan_out'
+config.model.multitask = False
 
 config.model.vgg = ConfigNode()
 config.model.vgg.n_channels = [64, 128, 256, 512, 512]

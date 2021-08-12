@@ -48,17 +48,17 @@ global_step = 0
 
 class LabelData(Dataset):
     def __init__(self, df: pd.DataFrame,configs, transforms=None):
-        self.files = [configs.dataset.dataset_dir +"/"+ file for file in df["image"].values]
-        self.y1 = df["label"].values.tolist()
-        self.y2 = df["label"].values.tolist()
-        self.y3 = df["label"].values.tolist()
+        self.files = [configs.dataset.dataset_dir +"/"+ file for file in df["filename"].values]
+        self.y1 = df["artist"].values.tolist()
+        self.y2 = df["style"].values.tolist()
+        self.y3 = df["genre"].values.tolist()
         self.transforms = transforms
         
     def __len__(self):
         return len(self.y)
     
     def __getitem__(self, i):
-        img = Image.open(self.files[i])
+        img = Image.open(self.files[i]).convert('RGB')
         label = self.y[i]
         if self.transforms is not None:
             img = self.transforms(img)
@@ -187,13 +187,16 @@ def load_config():
     config.merge_from_list(['train.dist.local_rank', args.local_rank])
 
     config.model.multitask = True
+    df = pd.read_csv(config.dataset.cvsfile_train)
+    datasets=[df['artist'].nunique(),df['style'].nunique(),df['genre'].nunique()]
+    config.dataset.multi_task = datasets
     config = update_config(config)
     config.freeze()
     return config
 
 def main():
     global global_step
-
+    print(1)
     config = load_config()
 
     set_seed(config)
@@ -203,6 +206,7 @@ def main():
                                     size=config.scheduler.epochs)
     
     output_dir = pathlib.Path(config.train.output_dir)
+    print(output_dir)
     if get_rank() == 0:
         if not config.train.resume and output_dir.exists():
             raise RuntimeError(
@@ -222,7 +226,7 @@ def main():
     logger.info(config)
     logger.info(get_env_info(config))
 
-
+    print(2)
     model = create_model(config)
     optimizer = create_optimizer(config, model)
     if config.device != 'cpu' and config.train.use_apex:
@@ -233,6 +237,7 @@ def main():
     model = apply_data_parallel_wrapper(config, model)
     train_loader, val_loader = create_dataloader(config, is_train=True)
 
+    print(3)
     scheduler = create_scheduler(config,
                                   optimizer,
                                   steps_per_epoch=len(train_loader))
@@ -242,6 +247,9 @@ def main():
                                 save_dir=output_dir,
                                 save_to_disk=get_rank() == 0)
     train_loss, val_loss = create_loss(config)
-
+    print(4)
     for epoch in range(config.train.epoch):
-        train(epoch, config, model, optimizer, scheduler, loss_func, train_loader,logger)
+        train(epoch, config, model, optimizer, scheduler, train_loss, train_loader,logger)
+
+if __name__ == '__main__':
+    main()
