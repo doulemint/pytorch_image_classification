@@ -1,12 +1,8 @@
-import importlib
-
-import torch
-import torch.nn as nn
-import torch.distributed as dist
-import yacs.config
 import timm
 import tensorflow as tf
+import torch.nn as nn
 
+from timm.models.layers.classifier import ClassifierHead
 from torchvision import models
 from pretrainedmodels import models as pm
 import pretrainedmodels
@@ -26,7 +22,7 @@ def get_model(configs,feature_extract=False):
         model = timm.create_model('resnext50_32x4d', pretrained=True)
         set_parameter_requires_grad(model, feature_extract)
         n_features = model.fc.in_features
-        model.fc = nn.Linear(n_features, configs.dataset.n_classes)
+        # model.fc = nn.Linear(n_features, configs.dataset.n_classes)
 
     elif configs.model.name.startswith("se_resnext50_32x4d"):
         #model = se_resnext50_32x4d_clw(configs.num_classes)    # 自定义se_resnext50_32x4d, result not good
@@ -45,8 +41,8 @@ def get_model(configs,feature_extract=False):
         model = pretrainedmodels.se_resnext101_32x4d(pretrained="imagenet")
         set_parameter_requires_grad(model, feature_extract)
         n_features =2048
-        model.last_linear = nn.Linear(2048, configs.dataset.n_classes)
-        model.avg_pool = nn.AdaptiveAvgPool2d(1)
+        # model.last_linear = nn.Linear(2048, configs.dataset.n_classes)
+        # model.avg_pool = nn.AdaptiveAvgPool2d(1)
 
     elif configs.model.name.startswith("pnasnet"):  # TODO: pretrainedmodels.se_resnext50_32x4d()
         model = pretrainedmodels.pnasnet5large(pretrained="imagenet")
@@ -170,46 +166,29 @@ def get_model(configs,feature_extract=False):
             nn.init.constant_(model.fc.bias, bias)
         ####
 
-    return model #, n_features
+    return model , n_features
 
-
-def create_model(config: yacs.config.CfgNode) -> nn.Module:
-    if config.model.multitask:
-        module = importlib.import_module('pytorch_image_classification.models.imagenet.MultiModel')
-        model = getattr(module, 'MultiTaskModel')(config)
-        device = torch.device(config.device)
-        model.to(device)
-        return model
-    if config.model.pretrain:
-        if config.model.pretrain_pth is not None:
-            model = models.resnet34(pretrained=False)
-            model.load_state_dict(torch.load(config.model.pretrain_pth))
-            set_parameter_requires_grad(model, False)
-            model.fc = nn.Linear(512, config.dataset.n_classes)
-        elif config.model.name:
-            model = get_model(config)
+#I didn't use it
+class MultiTaskModel(nn.Module):
+    """
+    Creates a MTL model with the encoder from "arch" and with dropout multiplier ps.
+    """
+    def __init__(self, config,ps=0.5):
+        super(MultiTaskModel,self).__init__()
+        self.model,n_features = get_model(config)
+                #fastai function that creates an encoder given an architecture
+        self.multitask = config.model.multitask
+        self.n_classes = config.dataset.n_classes
+        if  config.model.multitask:
+            for j,i in enumerate(config.dataset.n_classes):
+                setattr(self,'fc_'+str(j), ClassifierHead(n_features,i))    #fastai function that creates a head
         else:
-            raise Exception('pretrain model not aviliable')
-            
-    else:
-        module = importlib.import_module(
-            'pytorch_image_classification.models'
-            f'.{config.model.type}.{config.model.name}')
-        model = getattr(module, 'Network')(config)
-    device = torch.device(config.device)
-    model.to(device)
-    return model
+            self.fc = ClassifierHead(n_features,config.dataset.n_classes)
 
-
-def apply_data_parallel_wrapper(config: yacs.config.CfgNode,
-                                model: nn.Module) -> nn.Module:
-    local_rank = config.train.dist.local_rank
-    if dist.is_available() and dist.is_initialized():
-        if config.train.dist.use_sync_bn:
-            model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
-        model = nn.parallel.DistributedDataParallel(model,
-                                                    device_ids=[local_rank],
-                                                    output_device=local_rank)
-    else:
-        model.to(config.device)
-    return model
+    def forward(self,x):
+        x = self.model.forward_features(x)
+        if self.multitask:
+            return [ getattr(self, 'fc_'+str(i))(x) for i in range(len(self.n_classes))]
+        else:
+            x = self.fc(x)
+            return x
