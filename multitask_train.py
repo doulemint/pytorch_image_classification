@@ -139,27 +139,42 @@ def train(epoch, config, model, optimizer, scheduler, loss_func, train_loader,lo
     model.train()
 
     loss_meter = AverageMeter()
-    correct_meter = AverageMeter()
+    correct_meter1 = AverageMeter()
+    correct_meter2 = AverageMeter()
+    correct_meter3 = AverageMeter()
     start = time.time()
     losses = []
     with torch.no_grad():
         for step, (data, targets) in enumerate(train_loader):
             global_step += 1
+            
             data = data.to(device)
             targets = targets.to(device)
 
+            optimizer.zero_grad()
+
             outputs = model(data)
             loss_ = loss_func(outputs, targets)
+
+            loss_.backward()
+            optimizer.step()
             correct_ = compute_multi_accuracy(outputs,targets)
 
             num = data.size(0)
-            loss_meter.update(loss_, num)
-            correct_meter.update(correct_[0], 1)
+            loss = sum(loss_)
+            
+            loss_meter.update(loss, num)
+            correct_meter1.update(correct_[0], 1)
+            correct_meter2.update(correct_[1], 1)
+            correct_meter3.update(correct_[2], 1)
 
-        accuracy = correct_meter.sum / len(train_loader.dataset)
+        accuracy = correct_meter1.sum / len(train_loader.dataset)
+        accuracy2 = correct_meter1.sum / len(train_loader.dataset)
+        accuracy3 = correct_meter1.sum / len(train_loader.dataset)
         elapsed = time.time() - start
         logger.info(f'Elapsed {elapsed:.2f}')
-        logger.info(f'Loss {loss_meter.avg:.4f} Accuracy {accuracy:.4f}')
+        logger.info(f'Loss {loss_meter.avg:.4f} Accuracy {accuracy:.4f} \
+            Accuracy2 {accuracy2:.4f} Accuracy3 {accuracy3:.4f}')
 
     # return      
 def load_config():
