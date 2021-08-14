@@ -117,8 +117,14 @@ class MyDataset(Dataset):
 
 class Data(Dataset):
     def __init__(self, df: pd.DataFrame,label_map,configs, transforms=None):
-        self.files = [configs.dataset.dataset_dir +"/"+ file for file in df["image"].values]
-        self.y = df["label"].values.tolist()
+        if configs.dataset.subname == 'K100':
+          self.files = [configs.dataset.dataset_dir +"/"+ file for file in df["filename"].values]
+        else:
+          self.files = [configs.dataset.dataset_dir +"/"+ file for file in df["image"].values]
+        if configs.dataset.subname == 'K100':
+          self.y = df["artist"].values.tolist()
+        else:
+          self.y = df["label"].values.tolist()
         self.label_map=label_map
         self.transforms = transforms
         
@@ -126,7 +132,7 @@ class Data(Dataset):
         return len(self.y)
     
     def __getitem__(self, i):
-        img = Image.open(self.files[i])
+        img = Image.open(self.files[i]).convert('RGB')
         label = self.label_map[self.y[i]]
         if self.transforms is not None:
             img = self.transforms(img)
@@ -183,6 +189,7 @@ def create_dataset(config: yacs.config.CfgNode,
             return dataset
     elif config.dataset.name == 'ImageNet':
         if is_train:
+
             if config.dataset.type == 'dir':
                 dataset_dir = pathlib.Path(config.dataset.dataset_dir).expanduser()
                 train_transform = create_transform(config, is_train=True)
@@ -193,13 +200,26 @@ def create_dataset(config: yacs.config.CfgNode,
                                                             transform=val_transform)
                 return train_dataset, val_dataset
             elif config.dataset.type == 'df':
+                if config.model.multitask:
+                  df = pd.read_csv(config.dataset.cvsfile_train)
+                  if config.dataset.subname=="K100":
+                    train_df, valid_df = train_test_split(df, stratify=df["artist"].values)
+                  else:
+                    train_df, valid_df = train_test_split(df, stratify=df["label"].values)
+                  train_dataset = LabelData(train_df,config,create_transform(config, is_train=True))
+                  val_dataset = LabelData(valid_df,config,create_transform(config, is_train=False))
+                  return train_dataset, val_dataset
+
                 df = pd.read_csv(config.dataset.cvsfile_train)
                 label_map={}
                 if config.dataset.jsonfile:
                     with open(config.dataset.jsonfile, "r") as f:
                         label_map = json.load(f)
                 else:
-                    label_map = getLabelmap(df['label'])
+                    if config.dataset.subname == 'K100':
+                      label_map = getLabelmap(df['artist'])
+                    else:
+                      label_map = getLabelmap(df['label'])
                     # label_map = {int(v): k for k, v in label_map.items()}
                 if config.dataset.cvsfile_test:
                     train_df = pd.read_csv(config.dataset.cvsfile_train)
@@ -216,13 +236,16 @@ def create_dataset(config: yacs.config.CfgNode,
                 raise ValueError() 
         else:
             if config.dataset.type == 'df':
-              df = pd.read_csv(config.dataset.cvsfile_train)
-              label_map = getLabelmap(df['artist'])
-              df = pd.read_csv(config.dataset.cvsfile_test)
-              val_transform = create_transform(config, is_train=False)
-              valid_ds = Data(df,label_map,config,val_transform)
-              
-              return valid_ds
+              if config.dataset.subname == 'K100':
+                df = pd.read_csv(config.dataset.cvsfile_train)
+                label_map = getLabelmap(df['artist'])
+                df = pd.read_csv(config.dataset.cvsfile_test)
+                val_transform = create_transform(config, is_train=False)
+                valid_ds = Data(df,label_map,config,val_transform)
+                
+                return valid_ds
+              else:
+                raise ValueError()
             dataset_dir = pathlib.Path(config.dataset.dataset_dir).expanduser()
             val_transform = create_transform(config, is_train=False)
             val_dataset = torchvision.datasets.ImageFolder(dataset_dir / 'val',

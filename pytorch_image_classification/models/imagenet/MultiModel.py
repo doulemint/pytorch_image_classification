@@ -100,7 +100,8 @@ def get_model(configs,feature_extract=False):
     elif configs.model.name.startswith("efficientnet-b5"):
         model = timm.create_model('tf_efficientnet_b5_ns', pretrained=True, num_classes=configs.dataset.n_classes, drop_path_rate=0.2)
         set_parameter_requires_grad(model, feature_extract)
-        model.classifier = nn.Linear(model.classifier.in_features, configs.dataset.n_classes)
+        n_features = model.classifier.in_features
+        # model.classifier = nn.Linear(model.classifier.in_features, configs.dataset.n_classes)
     elif configs.model.name.startswith("vit_base_patch16_384"):
         model = timm.create_model('vit_base_patch16_384', pretrained=True, num_classes=configs.dataset.n_classes)  # , drop_rate=0.1)
         set_parameter_requires_grad(model, feature_extract)
@@ -178,10 +179,10 @@ class MultiTaskModel(nn.Module):
         self.model,n_features = get_model(config)
                 #fastai function that creates an encoder given an architecture
         self.multitask = config.model.multitask
-        self.n_classes = config.dataset.n_classes
+        self.n_classes = config.dataset.multi_task
         if  config.model.multitask:
-            for j,i in enumerate(config.dataset.n_classes):
-                setattr(self,'fc_'+str(j), ClassifierHead(n_features,i))    #fastai function that creates a head
+            for j,i in enumerate(config.dataset.multi_task):
+                setattr(self,'fc_'+str(j), ClassifierHead(n_features,i)) 
         else:
             self.fc = ClassifierHead(n_features,config.dataset.n_classes)
 

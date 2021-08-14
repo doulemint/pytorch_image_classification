@@ -10,10 +10,12 @@ config.cudnn.deterministic = False
 
 config.dataset = ConfigNode()
 config.dataset.name = 'CIFAR10'
+config.dataset.subname = None
 config.dataset.dataset_dir = ''
 config.dataset.image_size = 32
 config.dataset.n_channels = 3
 config.dataset.n_classes = 10
+config.dataset.multi_task = [0,0,0]
 config.dataset.type = 'dir'
 config.dataset.cvsfile_train = None
 config.dataset.cvsfile_test = None

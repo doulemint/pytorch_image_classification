@@ -552,8 +552,8 @@ def main():
             tensorboard_writer2.flush()
 
             
-            if (((epoch % config.train.checkpoint_period
-                    == 0) or (epoch == config.scheduler.epochs)and acc1>best_acc) or acc1>best_acc):
+            if ((((epoch % config.train.checkpoint_period
+                    == 0) or (epoch == config.scheduler.epochs))and acc1>best_acc) or acc1>best_acc):
                 if config.train.use_kfold:
                     checkpoint_config = {
                         'epoch': epoch,

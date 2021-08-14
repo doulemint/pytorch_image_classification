@@ -68,7 +68,7 @@ def get_model(configs,feature_extract=False):
             model.load_state_dict(torch.load(configs.pretrain_pth))
         else:
             model = models.resnet34(pretrained=True)
-        set_parameter_requires_grad(model, feature_extract)
+        set_parameter_(model, feature_extract)
         n_features = 512
         model.avgpool = nn.AdaptiveAvgPool2d(1)
         model.fc = nn.Linear(512, configs.dataset.n_classes)

@@ -1,6 +1,7 @@
 dataset:
   type: df
   name: ImageNet
+  subname: K100
   dataset_dir: '/content/images'
   image_size: 224
   n_channels: 3
