@@ -9,6 +9,7 @@ from pytorch_image_classification import (
     update_config,
     worker_init_fn,
 )
+from pytorch_image_classification.config.config_node import ConfigNode
 from pytorch_image_classification.utils import (
     AverageMeter,
     DummyWriter,
@@ -138,12 +139,13 @@ def create_dataloader(config: yacs.config.CfgNode,is_train: bool) -> Union[Tuple
                 
         return test_loader
 def compute_multi_accuracy(outputs, targets):
-    acc = []
-    for out,target in zip(outputs,targets):
-        _, preds = torch.max(out, dim=1)
-        correct_ = preds.eq(target).sum().item()
-        acc.append(correct_)
-    return acc
+    with torch.no_grad():
+        acc = []
+        for out,target in zip(outputs,targets):
+            _, preds = torch.max(out, dim=1)
+            correct_ = preds.eq(target).sum().item()
+            acc.append(correct_)
+        return acc
     
 
 def train(epoch, config, model, optimizer, scheduler, loss_func, train_loader,logger,tensorboard_writer,tensorboard_writer2):
@@ -181,9 +183,9 @@ def train(epoch, config, model, optimizer, scheduler, loss_func, train_loader,lo
             # print("loss： ",loss)
             # print("loss： ",loss.item())
             loss_meter.update(loss_.item(), num)
-            correct_meter1.update(correct_[0], 1)
-            correct_meter2.update(correct_[1], 1)
-            correct_meter3.update(correct_[2], 1)
+            correct_meter1.update(correct_[0], num)
+            correct_meter2.update(correct_[1], num)
+            correct_meter3.update(correct_[2], num)
 
             if torch.cuda.is_available():
                 torch.cuda.synchronize()
@@ -251,7 +253,7 @@ def validate(epoch, config, model, loss_func, val_loader, logger,
 
             data = data.to(
                 device, non_blocking=config.validation.dataloader.non_blocking)
-            targets = targets.to(device)
+            targets = [ tar.to(device) for tar in targets ]
 
             outputs = model(data)
             loss = loss_func(outputs, targets)
@@ -275,15 +277,12 @@ def validate(epoch, config, model, loss_func, val_loader, logger,
                 acc1.div_(dist.get_world_size())
                 # acc5.div_(dist.get_world_size())
             loss = loss.item()
-            acc1 = acc1[0].item()
-            acc2 = acc1[1].item()
-            acc3 = acc1[2].item()
 
             num = data.size(0)
             loss_meter.update(loss, num)
-            correct_meter1.update(acc1, num)
-            correct_meter2.update(acc2, num)
-            correct_meter3.update(acc3, num)
+            correct_meter1.update(acc1[0], num)
+            correct_meter2.update(acc1[1], num)
+            correct_meter3.update(acc1[2], num)
 
             if torch.cuda.is_available():
                 torch.cuda.synchronize()
@@ -393,6 +392,15 @@ def main():
                                 save_dir=output_dir,
                                 save_to_disk=get_rank() == 0)
 
+    
+    if config.train.resume:
+        checkpoint_config = checkpointer.resume_or_load('', resume=True)
+        global_step = checkpoint_config['global_step']
+        start_epoch = checkpoint_config['epoch']
+        config.defrost()
+        config.merge_from_other_cfg(ConfigNode(checkpoint_config['config']))
+        config.freeze()
+
     if get_rank() == 0 and config.train.use_tensorboard:
         tensorboard_writer = create_tensorboard_writer(
             config, output_dir, purge_step=config.train.start_epoch + 1)
@@ -404,6 +412,7 @@ def main():
     
     train_loss, val_loss = create_loss(config)
     fold=0
+    best_acc=0
     for epoch in range(config.scheduler.epochs):
         train(epoch, config, model, optimizer, scheduler, train_loss, train_loader,logger
             , tensorboard_writer, tensorboard_writer2)

@@ -54,7 +54,8 @@ global_step = 0
 def load_config():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str)
-    parser.add_argument('--resume', type=str, default='')
+    parser.add_argument('--resume', type=str, default='')#multitask
+    parser.add_argument('--multitask', type=bool, default=None)
     parser.add_argument('--local_rank', type=int, default=0)
     parser.add_argument('options', default=None, nargs=argparse.REMAINDER)
     args = parser.parse_args()
@@ -63,6 +64,8 @@ def load_config():
     if args.config is not None:
         config.merge_from_file(args.config)
     config.merge_from_list(args.options)
+    if args.multitask != None:
+         config.merge_from_list(['config.model.multitask', args.local_rank])
     if not torch.cuda.is_available():
         config.device = 'cpu'
         config.train.dataloader.pin_memory = False

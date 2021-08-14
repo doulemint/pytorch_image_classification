@@ -83,6 +83,34 @@ def get_img2(imgsrc):
     img = np.asarray(Image.open(imgsrc))
     return img
     
+class LabelData(Dataset):
+    def __init__(self, train_df: pd.DataFrame, test_df: pd.DataFrame,configs,istrain=False, transforms=None):
+        self.files = [configs.dataset.dataset_dir +"/"+ file for file in df["filename"].values]
+        self.y1 = train_df["artist"].values.tolist()
+        self.label_map1=getLabelmap(self.y1)
+        self.y2 = train_df["style"].values.tolist()
+        self.label_map2=getLabelmap(self.y2)
+        self.y3 = train_df["genre"].values.tolist()
+        self.label_map3=getLabelmap(self.y3)
+        if istrain:
+          self.y1 = train_df["artist"].values.tolist()
+          self.y2 = train_df["style"].values.tolist()
+          self.y3 = train_df["genre"].values.tolist()
+        self.transforms = transforms
+        
+    def __len__(self):
+        return len(self.y1)
+    
+    def __getitem__(self, i):
+        img = Image.open(self.files[i]).convert('RGB')
+        label1 = self.label_map1[self.y1[i]]
+        label2 = self.label_map2[self.y2[i]]
+        label3 = self.label_map3[self.y3[i]]
+        if self.transforms is not None:
+            img = self.transforms(img)
+            
+        return img, [label1,label2,label3]
+
 class MyDataset(Dataset):
     def __init__(self, df, data_root, transforms=None, output_label=True):
         
