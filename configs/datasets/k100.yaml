@@ -7,7 +7,7 @@ dataset:
   n_channels: 3
   n_classes: 10
   cvsfile_train: '/content/MultitaskPainting100k_Dataset_groundtruth/groundtruth_multiloss_train_header.csv'
-  cvsfile_test: '/content/MultitaskPainting100k_Dataset_groundtruth/groundtruth_multiloss_train_header.csv'
+  cvsfile_test: '/content/MultitaskPainting100k_Dataset_groundtruth/groundtruth_multiloss_test_header.csv'
 model:
   type: imagenet
   name: efficientnet-b5

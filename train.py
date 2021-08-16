@@ -570,7 +570,7 @@ def main():
                         'global_step': global_step,
                         'config': config.as_dict(),
                     }
-                print("improve {} from {} save checkpoint!".format(best_acc,acc1))
+                print("improve {} from {} save checkpoint!".format(acc1,best_acc))
                 best_acc = acc1
                 checkpointer.save(f'checkpoint_{epoch:05d}', **checkpoint_config)
 

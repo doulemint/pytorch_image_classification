@@ -439,7 +439,7 @@ def main():
                     }
                 print("improve {} from {} save checkpoint!".format(best_acc,acc1))
                 best_acc = acc1
-                checkpointer.save(f'checkpoint_{epoch:05d}', **checkpoint_config)
+                checkpointer.save(f'checkpoint_bestacc', **checkpoint_config)
 
     tensorboard_writer.close()
     tensorboard_writer2.close()
