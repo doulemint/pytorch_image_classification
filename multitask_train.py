@@ -138,13 +138,15 @@ def create_dataloader(config: yacs.config.CfgNode,is_train: bool) -> Union[Tuple
                 pin_memory=config.test.dataloader.pin_memory)
                 
         return test_loader
+
 def compute_multi_accuracy(outputs, targets):
+    batch_size = targets[0].size(0)
     with torch.no_grad():
         acc = []
         for out,target in zip(outputs,targets):
             _, preds = torch.max(out, dim=1)
             correct_ = preds.eq(target).sum().item()
-            acc.append(correct_)
+            acc.append(correct_.double() *(1/batch_size))
         return acc
     
 

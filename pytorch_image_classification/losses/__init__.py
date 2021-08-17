@@ -6,6 +6,7 @@ import yacs.config
 from .cutmix import CutMixLoss
 from .mixup import MixupLoss
 from .ricap import RICAPLoss
+from .focal_loss import FocalLoss
 from .dual_cutout import DualCutoutLoss
 from .label_smoothing import LabelSmoothingLoss
 
@@ -40,6 +41,8 @@ def create_loss(config: yacs.config.CfgNode) -> Tuple[Callable, Callable]:
         train_loss = LabelSmoothingLoss(config, reduction='mean')
     elif config.augmentation.use_dual_cutout:
         train_loss = DualCutoutLoss(config, reduction='mean')
+    elif config.augmentation.use_focal_loss:
+        train_loss = FocalLoss(gamma=0)
     else:
         train_loss = nn.CrossEntropyLoss(reduction='mean')
     val_loss = nn.CrossEntropyLoss(reduction='mean')

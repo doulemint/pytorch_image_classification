@@ -26,6 +26,12 @@ class Normalize:
         image = (image - self.mean) / self.std
         return image
 
+class toNumpy:
+    def __init__(self):
+        pass
+
+    def __call__(self, image: PIL.Image.Image) -> np.ndarray:
+        return np.asarray(image)
 
 class RandomCrop:
     def __init__(self, config: yacs.config.CfgNode):
