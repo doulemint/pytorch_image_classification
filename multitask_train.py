@@ -165,7 +165,15 @@ def train(epoch, config, model, optimizer, scheduler, loss_func, train_loader,lo
     start = time.time()
     losses = []
     for step, (data, targets) in enumerate(train_loader):
+            step += 1
             global_step += 1
+
+            if get_rank() == 0 and step == 1:
+                if config.tensorboard.train_images:
+                    image = torchvision.utils.make_grid(data,
+                                                        normalize=True,
+                                                        scale_each=True)
+                    tensorboard_writer.add_image('Train/Image', image, epoch)
             
             data = data.to(device)
             targets = [ tar.to(device) for tar in targets ]
@@ -177,7 +185,31 @@ def train(epoch, config, model, optimizer, scheduler, loss_func, train_loader,lo
 
             
             correct_ = compute_multi_accuracy(outputs,targets)
+            acc1,acc2,acc3 = correct_
+            acc1,acc2,acc3 = torch.Tensor(acc1),torch.Tensor(acc2),torch.Tensor(acc3)
+            if config.train.distributed:
+                loss_all_reduce = dist.all_reduce(loss_,
+                                                op=dist.ReduceOp.SUM,
+                                                async_op=True)
+                acc1_all_reduce = dist.all_reduce(acc1,
+                                                op=dist.ReduceOp.SUM,
+                                                async_op=True)
+                acc2_all_reduce = dist.all_reduce(acc2,
+                                                op=dist.ReduceOp.SUM,
+                                                async_op=True)
+                acc3_all_reduce = dist.all_reduce(acc3,
+                                                op=dist.ReduceOp.SUM,
+                                                async_op=True)
+                loss_all_reduce.wait()
+                acc1_all_reduce.wait()
+                acc2_all_reduce.wait()
+                acc3_all_reduce.wait()
+                loss_.div_(dist.get_world_size())
+                acc1.div_(dist.get_world_size())
+                acc2.div_(dist.get_world_size())
+                acc3.div_(dist.get_world_size())
 
+            correct_ = [acc1,acc2,acc3]
             num = data.size(0)
             # loss = sum(loss_)
             loss_.backward()
@@ -216,18 +248,19 @@ def train(epoch, config, model, optimizer, scheduler, loss_func, train_loader,lo
 
             scheduler.step()
 
-    accuracy = correct_meter1.sum / len(train_loader.dataset)
-    accuracy2 = correct_meter1.sum / len(train_loader.dataset)
-    accuracy3 = correct_meter1.sum / len(train_loader.dataset)
-    elapsed = time.time() - start
-    logger.info(f'Elapsed {elapsed:.2f}')
-    tensorboard_writer.add_scalar('Train/Loss', loss_meter.avg, epoch)
-    tensorboard_writer.add_scalar('Train/Acc1', correct_meter1.avg, epoch)
-    tensorboard_writer.add_scalar('Train/Acc2', correct_meter2.avg, epoch)
-    tensorboard_writer.add_scalar('Train/Acc3', correct_meter3.avg, epoch)
-    tensorboard_writer.add_scalar('Train/Time', elapsed, epoch)
-    tensorboard_writer.add_scalar('Train/LearningRate',
-                                      scheduler.get_last_lr()[0], epoch)
+    # accuracy = correct_meter1.sum / len(train_loader.dataset)
+    # accuracy2 = correct_meter1.sum / len(train_loader.dataset)
+    # accuracy3 = correct_meter1.sum / len(train_loader.dataset)
+    if get_rank() == 0:
+        elapsed = time.time() - start
+        logger.info(f'Elapsed {elapsed:.2f}')
+        tensorboard_writer.add_scalar('Train/Loss', loss_meter.avg, epoch)
+        tensorboard_writer.add_scalar('Train/Acc1', correct_meter1.avg, epoch)
+        tensorboard_writer.add_scalar('Train/Acc2', correct_meter2.avg, epoch)
+        tensorboard_writer.add_scalar('Train/Acc3', correct_meter3.avg, epoch)
+        tensorboard_writer.add_scalar('Train/Time', elapsed, epoch)
+        tensorboard_writer.add_scalar('Train/LearningRate',
+                                        scheduler.get_last_lr()[0], epoch)
 
 def validate(epoch, config, model, loss_func, val_loader, logger,
              tensorboard_writer):
@@ -254,31 +287,41 @@ def validate(epoch, config, model, loss_func, val_loader, logger,
                         tensorboard_writer.add_image('Val/Image', image, epoch)
 
             data = data.to(
-                device, non_blocking=config.validation.dataloader.non_blocking)
+                    device, non_blocking=config.validation.dataloader.non_blocking)
             targets = [ tar.to(device) for tar in targets ]
 
             outputs = model(data)
             loss = loss_func(outputs, targets)
 
             acc1 = compute_multi_accuracy(outputs,targets)
+            acc,acc2,acc3 = acc1
+            acc,acc2,acc3 = torch.Tensor(acc),torch.Tensor(acc2),torch.Tensor(acc3)
 
             if config.train.distributed:
-                loss_all_reduce = dist.all_reduce(loss,
-                                                  op=dist.ReduceOp.SUM,
-                                                  async_op=True)
-                acc1_all_reduce = dist.all_reduce(acc1[0],
-                                                  op=dist.ReduceOp.SUM,
-                                                  async_op=True)
-                acc5_all_reduce = dist.all_reduce(acc1[1],
-                                                  op=dist.ReduceOp.SUM,
-                                                  async_op=True)
-                loss_all_reduce.wait()
-                acc1_all_reduce.wait()
-                acc5_all_reduce.wait()
-                loss.div_(dist.get_world_size())
-                acc1.div_(dist.get_world_size())
-                # acc5.div_(dist.get_world_size())
+                    loss_all_reduce = dist.all_reduce(loss,
+                                                    op=dist.ReduceOp.SUM,
+                                                    async_op=True)
+                    acc1_all_reduce = dist.all_reduce(acc,
+                                                    op=dist.ReduceOp.SUM,
+                                                    async_op=True)
+                    acc2_all_reduce = dist.all_reduce(acc2,
+                                                    op=dist.ReduceOp.SUM,
+                                                    async_op=True)
+                    acc3_all_reduce = dist.all_reduce(acc3,
+                                                    op=dist.ReduceOp.SUM,
+                                                    async_op=True)
+                    loss_all_reduce.wait()
+                    acc1_all_reduce.wait()
+                    acc2_all_reduce.wait()
+                    acc3_all_reduce.wait()
+
+                    loss.div_(dist.get_world_size())
+                    acc1.div_(dist.get_world_size())
+                    acc2.div_(dist.get_world_size())
+                    acc3.div_(dist.get_world_size())
+
             loss = loss.item()
+            acc1 = [acc,acc2,acc3]
 
             num = data.size(0)
             loss_meter.update(loss, num)
@@ -287,16 +330,16 @@ def validate(epoch, config, model, loss_func, val_loader, logger,
             correct_meter3.update(acc1[2], num)
 
             if torch.cuda.is_available():
-                torch.cuda.synchronize()
+                    torch.cuda.synchronize()
+            
+    logger.info(f'Epoch {epoch} '
+                                    f'loss {loss_meter.avg:.4f} '
+                                    f'acc1@ {correct_meter1.avg:.4f} '
+                                    f'acc2@ {correct_meter2.avg:.4f}'
+                                    f'acc3@ {correct_meter3.avg:.4f}')
 
-        logger.info(f'Epoch {epoch} '
-                    f'loss {loss_meter.avg:.4f} '
-                    f'acc1@ {correct_meter1.avg:.4f} '
-                    f'acc2@ {correct_meter2.avg:.4f}'
-                    f'acc3@ {correct_meter3.avg:.4f}')
-
-        elapsed = time.time() - start
-        logger.info(f'Elapsed {elapsed:.2f}')
+    elapsed = time.time() - start
+    logger.info(f'Elapsed {elapsed:.2f}')
         
 
     if get_rank() == 0:
@@ -352,6 +395,13 @@ def main():
 
     epoch_seeds = np.random.randint(np.iinfo(np.int32).max // 2,
                                     size=config.scheduler.epochs)
+    
+    if config.train.distributed:
+        dist.init_process_group(backend=config.train.dist.backend,
+                                init_method=config.train.dist.init_method,
+                                rank=config.train.dist.node_rank,
+                                world_size=config.train.dist.world_size)
+        torch.cuda.set_device(config.train.dist.local_rank)
     
     output_dir = pathlib.Path(config.train.output_dir)
     print(output_dir)

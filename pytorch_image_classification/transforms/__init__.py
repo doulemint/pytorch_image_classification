@@ -31,7 +31,7 @@ from .transforms import RandomResizeCrop as tRandomResizeCrop
 from .transforms import RandomHorizontalFlip as tRandomHorizontalFlip
 from .transforms import StepCrop
 
-
+from stepcrop import StepcropAlbu
 from albumentations import (
     HorizontalFlip, VerticalFlip, Rotate, ShiftScaleRotate, RandomBrightnessContrast, Perspective, CLAHE, 
     Transpose, Blur, OpticalDistortion, GridDistortion, HueSaturationValue, ColorJitter, GaussNoise, MotionBlur, MedianBlur,
@@ -116,7 +116,7 @@ def create_imagenet_transform(config: yacs.config.CfgNode,
     if is_train:
         transforms = []
         if config.augmentation.use_albumentations:
-            return Compose([
+            transforms = [
             OneOf([
             CoarseDropout(p=0.5),
             GaussNoise(),
@@ -129,9 +129,13 @@ def create_imagenet_transform(config: yacs.config.CfgNode,
             HueSaturationValue(hue_shift_limit=0.2, sat_shift_limit=0.2, val_shift_limit=0.2, p=0.5),
             RandomBrightnessContrast(brightness_limit=(-0.1,0.1), contrast_limit=(-0.1, 0.1), p=0.5),
             ], n=3, p=0.6),
-            Resize(config.dataset.image_size, config.dataset.image_size),
+            ]
+            if config.augmentation.use_step_crop:
+                transforms.append(StepcropAlbu(p=0.5))
+            transforms.extend([Resize(config.dataset.image_size, config.dataset.image_size),
             Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225], max_pixel_value=255.0, p=1.0),
-            ToTensorV2(p=1.0),], p=1.0)
+            ToTensorV2(p=1.0),])
+            return Compose(transforms, p=1.0)
 
         if config.augmentation.use_random_crop:
             transforms.append(tRandomResizeCrop(config))

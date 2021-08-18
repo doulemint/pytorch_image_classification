@@ -80,7 +80,7 @@ def get_img(imgsrc):
     im_rgb = cv2.cvtColor(im_bgr, cv2.COLOR_BGR2RGB)
     return im_rgb
 def get_img2(imgsrc):
-    img = np.asarray(Image.open(imgsrc))
+    img = np.asarray(Image.open(imgsrc).convert('RGB'))
     return img
     
 class LabelData(Dataset):

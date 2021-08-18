@@ -42,7 +42,7 @@ def create_loss(config: yacs.config.CfgNode) -> Tuple[Callable, Callable]:
     elif config.augmentation.use_dual_cutout:
         train_loss = DualCutoutLoss(config, reduction='mean')
     elif config.augmentation.use_focal_loss:
-        train_loss = FocalLoss(gamma=0)
+        train_loss = FocalLoss(alpha=[0.75]*config.dataset.n_classes,num_classes=config.dataset.n_classes)
     else:
         train_loss = nn.CrossEntropyLoss(reduction='mean')
     val_loss = nn.CrossEntropyLoss(reduction='mean')

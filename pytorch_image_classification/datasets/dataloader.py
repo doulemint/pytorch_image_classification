@@ -24,9 +24,12 @@ def prepare_dataloader(df, trn_idx, val_idx,config, data_root='../classify-leave
     train_ds = MyDataset(train_, data_root, transforms=create_transform(config, is_train=True), output_label=True)
     valid_ds = MyDataset(valid_, data_root, transforms=create_transform(config, is_train=False), output_label=True)
     
+    train_collator = create_collator(config)
+
     train_loader = torch.utils.data.DataLoader(
         train_ds,
         batch_size=config.train.batch_size,
+        collate_fn=train_collator,
         pin_memory=config.train.dataloader.pin_memory,
         drop_last=False,
         shuffle=True,        
