@@ -16,7 +16,7 @@ import torch.distributed as dist
 import torchvision
 #1
 from sklearn.metrics import accuracy_score
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import StratifiedKFold,StratifiedShuffleSplit
 
 from fvcore.common.checkpoint import Checkpointer
 
@@ -462,7 +462,13 @@ def main():
 
     # folds=[]
     if config.train.use_kfold==False:
-        train_loader, val_loader = create_dataloader(config, is_train=True)
+        if config.augmentation.use_albumentations:
+            train_clean = get_files(config.dataset.dataset_dir+'train/','train')
+            sss = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=0)
+            for trn_idx, val_idx in sss.split(train_clean['filename'], train_clean['label']):
+            	train_loader, val_loader = prepare_dataloader(train_clean, trn_idx, val_idx,config, data_root=config.dataset.dataset_dir)
+        else:
+            train_loader, val_loader = create_dataloader(config, is_train=True)
         # config.train.fold_num = 1
         # folds=[1]
     else:
@@ -572,7 +578,7 @@ def main():
                     }
                 print("improve {} from {} save checkpoint!".format(acc1,best_acc))
                 best_acc = acc1
-                checkpointer.save(f'checkpoint_{epoch:05d}', **checkpoint_config)
+                checkpointer.save(f'checkpoint_bstacc', **checkpoint_config)
 
     tensorboard_writer.close()
     tensorboard_writer2.close()
