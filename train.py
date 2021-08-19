@@ -463,10 +463,13 @@ def main():
     # folds=[]
     if config.train.use_kfold==False:
         if config.augmentation.use_albumentations:
-            train_clean = get_files(config.dataset.dataset_dir+'train/','train')
-            sss = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=0)
-            for trn_idx, val_idx in sss.split(train_clean['filename'], train_clean['label']):
-            	train_loader, val_loader = prepare_dataloader(train_clean, trn_idx, val_idx,config, data_root=config.dataset.dataset_dir)
+            if config.dataset.type=='dir':
+                train_clean = get_files(config.dataset.dataset_dir+'train/','train')
+                sss = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=0)
+                for trn_idx, val_idx in sss.split(train_clean['filename'], train_clean['label']):
+                    train_loader, val_loader = prepare_dataloader(train_clean, trn_idx, val_idx,config, data_root=config.dataset.dataset_dir)
+            else: 
+                train_loader, val_loader = create_dataloader(config, is_train=True)     
         else:
             train_loader, val_loader = create_dataloader(config, is_train=True)
         # config.train.fold_num = 1
@@ -530,13 +533,14 @@ def main():
 
     train_loss, val_loss = create_loss(config)
 
+    best_acc=0
     if (config.train.val_period > 0 and start_epoch == 0
             and config.train.val_first):
-        if not config.train.use_kfold:
-          _=validate(0, config, model, val_loss, val_loader, logger,
+        if not config.train.use_kfold and config.train.resume:
+          best_acc=validate(0, config, model, val_loss, val_loader, logger,
                  tensorboard_writer)
     #add kfold
-    best_acc=0
+    
     for fold in range(config.train.fold_num):
         logger.info(f'folds {fold}')
         # for fold, (trn_idx, val_idx) in enumerate(folds):

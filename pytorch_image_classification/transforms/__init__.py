@@ -31,7 +31,7 @@ from .transforms import RandomResizeCrop as tRandomResizeCrop
 from .transforms import RandomHorizontalFlip as tRandomHorizontalFlip
 from .transforms import StepCrop
 
-from stepcrop import StepcropAlbu
+from .stepcrop import StepcropAlbu
 from albumentations import (
     HorizontalFlip, VerticalFlip, Rotate, ShiftScaleRotate, RandomBrightnessContrast, Perspective, CLAHE, 
     Transpose, Blur, OpticalDistortion, GridDistortion, HueSaturationValue, ColorJitter, GaussNoise, MotionBlur, MedianBlur,

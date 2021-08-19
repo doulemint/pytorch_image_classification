@@ -24,6 +24,7 @@ from pytorch_image_classification.utils import (
     set_seed,
     setup_cudnn,
 )
+import apex
 from pytorch_image_classification import create_transform
 from pytorch_image_classification import create_collator
 from PIL import Image
@@ -57,7 +58,7 @@ def getLabelmap(label_list):
 
 class LabelData(Dataset):
     def __init__(self, df: pd.DataFrame,configs, transforms=None):
-        self.files = [configs.dataset.dataset_dir +"/"+ file for file in df["filename"].values]
+        self.files = [configs.dataset.dataset_dir +"/"+ file for file in df["file"].values]
         self.y1 = df["artist"].values.tolist()
         self.label_map1=getLabelmap(self.y1)
         self.y2 = df["style"].values.tolist()
@@ -85,7 +86,7 @@ def create_dataloader(config: yacs.config.CfgNode,is_train: bool) -> Union[Tuple
         if config.dataset.subname=="K100":
           train_df, valid_df = train_test_split(df, stratify=df["artist"].values)
         else:
-          train_df, valid_df = train_test_split(df, stratify=df["label"].values)
+          train_df, valid_df = train_test_split(df, stratify=df["artist"].values)
         train_dataset = LabelData(train_df,config,create_transform(config, is_train=True))
         val_dataset = LabelData(valid_df,config,create_transform(config, is_train=False))
 
@@ -146,7 +147,7 @@ def compute_multi_accuracy(outputs, targets):
         for out,target in zip(outputs,targets):
             _, preds = torch.max(out, dim=1)
             correct_ = preds.eq(target).sum().item()
-            acc.append(correct_.double() *(1/batch_size))
+            acc.append(correct_ *(1/batch_size*1.0))
         return acc
     
 
@@ -185,8 +186,7 @@ def train(epoch, config, model, optimizer, scheduler, loss_func, train_loader,lo
 
             
             correct_ = compute_multi_accuracy(outputs,targets)
-            acc1,acc2,acc3 = correct_
-            acc1,acc2,acc3 = torch.Tensor(acc1),torch.Tensor(acc2),torch.Tensor(acc3)
+            acc1,acc2,acc3 = correct_;acc1,acc2,acc3 = torch.Tensor([acc1]),torch.Tensor([acc2]),torch.Tensor([acc3])
             if config.train.distributed:
                 loss_all_reduce = dist.all_reduce(loss_,
                                                 op=dist.ReduceOp.SUM,
@@ -209,7 +209,7 @@ def train(epoch, config, model, optimizer, scheduler, loss_func, train_loader,lo
                 acc2.div_(dist.get_world_size())
                 acc3.div_(dist.get_world_size())
 
-            correct_ = [acc1,acc2,acc3]
+            correct_ = torch.cat(acc1,acc2,acc3)# correct_ = [acc1,acc2,acc3]
             num = data.size(0)
             # loss = sum(loss_)
             loss_.backward()
@@ -294,8 +294,7 @@ def validate(epoch, config, model, loss_func, val_loader, logger,
             loss = loss_func(outputs, targets)
 
             acc1 = compute_multi_accuracy(outputs,targets)
-            acc,acc2,acc3 = acc1
-            acc,acc2,acc3 = torch.Tensor(acc),torch.Tensor(acc2),torch.Tensor(acc3)
+            # acc,acc2,acc3 = acc1;acc,acc2,acc3 = torch.Tensor([acc1]),torch.Tensor([acc2]),torch.Tensor([acc3])
 
             if config.train.distributed:
                     loss_all_reduce = dist.all_reduce(loss,
@@ -321,7 +320,7 @@ def validate(epoch, config, model, loss_func, val_loader, logger,
                     acc3.div_(dist.get_world_size())
 
             loss = loss.item()
-            acc1 = [acc,acc2,acc3]
+            # acc1=torch.cat((acc,acc2,acc3),0)#acc1 = [acc,acc2,acc3]
 
             num = data.size(0)
             loss_meter.update(loss, num)

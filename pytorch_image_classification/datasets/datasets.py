@@ -1,7 +1,8 @@
 from typing import Tuple, Union
 
 import pathlib
-from PIL import Image
+from PIL import Image,ImageFile 
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 import torch
 import torchvision
 import yacs.config
@@ -12,6 +13,7 @@ from torch.utils.data import Dataset
 from sklearn.model_selection import train_test_split
 
 from pytorch_image_classification import create_transform
+
 
 import os
 from glob import glob
@@ -155,15 +157,21 @@ class Data(Dataset):
           self.y = df["label"].values.tolist()
         self.label_map=label_map
         self.transforms = transforms
+        self.albuAug=configs.augmentation.use_albumentations
         
     def __len__(self):
         return len(self.y)
     
     def __getitem__(self, i):
-        img = Image.open(self.files[i]).convert('RGB')
+        
         label = self.label_map[self.y[i]]
         if self.transforms is not None:
-            img = self.transforms(img)
+            if self.albuAug:
+                img  = get_img2(self.files[i])
+                img = self.transforms(image=img)['image']
+            else:
+                img = Image.open(self.files[i]).convert('RGB')
+                img = self.transforms(img)
             
         return img, label
 

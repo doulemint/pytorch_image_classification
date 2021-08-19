@@ -308,10 +308,14 @@ python train.py --config configs/cifar/wrn.yaml \
 
 ##### Using 2 GPUs
 
+python -m torch.distributed.launch --nproc_per_node 2 \
+    train.py --config configs/kfolds/efficient.yaml --resume experiments/imagenet/efficientnet-b5/exp02_MUAug\
+    train.distributed True train.batch_size 16 validation.batch_size 16
+
 ```bash
 python -m torch.distributed.launch --nproc_per_node 2 \
-    train.py --config configs/cifar/wrn.yaml \
-    train.distributed True \
+    multitask_train.py --config configs/multitask/wikiArt.yaml \
+    train.distributed True train.batch_size 16 validation.batch_size 16 \
     train.base_lr 0.2 \
     train.batch_size 256 \
     scheduler.epochs 200 \
