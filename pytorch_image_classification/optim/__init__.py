@@ -26,8 +26,9 @@ def get_param_list(config, model):
     return param_list
 
 
-def create_optimizer(config, model):
-    params = get_param_list(config, model)
+def create_optimizer(config, model,params=None):
+    if params is None:
+        params = get_param_list(config, model)
 
     if config.train.optimizer == 'sgd':
         optimizer = torch.optim.SGD(params,

@@ -87,7 +87,7 @@ def get_img2(imgsrc):
     
 class LabelData(Dataset):
     def __init__(self, train_df: pd.DataFrame, test_df: pd.DataFrame,configs,istrain=False, transforms=None):
-        self.files = [configs.dataset.dataset_dir +"/"+ file for file in df["filename"].values]
+        self.files = [configs.dataset.dataset_dir +"/"+ file for file in train_df["filename"].values]
         self.y1 = train_df["artist"].values.tolist()
         self.label_map1=getLabelmap(self.y1)
         self.y2 = train_df["style"].values.tolist()
@@ -242,8 +242,8 @@ def create_dataset(config: yacs.config.CfgNode,
                     train_df, valid_df = train_test_split(df, stratify=df["artist"].values)
                   else:
                     train_df, valid_df = train_test_split(df, stratify=df["label"].values)
-                  train_dataset = LabelData(train_df,config,create_transform(config, is_train=True))
-                  val_dataset = LabelData(valid_df,config,create_transform(config, is_train=False))
+                  train_dataset = LabelData(train_df,valid_df,config,create_transform(config, is_train=True))
+                  val_dataset = LabelData(train_df,valid_df,config,create_transform(config, is_train=False))
                   return train_dataset, val_dataset
 
                 df = pd.read_csv(config.dataset.cvsfile_train)
@@ -257,11 +257,14 @@ def create_dataset(config: yacs.config.CfgNode,
                     else:
                       label_map = getLabelmap(df['label'])
                     # label_map = {int(v): k for k, v in label_map.items()}
-                if config.dataset.cvsfile_test:
+                if config.train.use_test_as_val:
                     train_df = pd.read_csv(config.dataset.cvsfile_train)
                     valid_df = pd.read_csv(config.dataset.cvsfile_test)
                 else:
-                    train_df, valid_df = train_test_split(df, stratify=df["label"].values)
+                    if config.dataset.subname == 'K100':
+                        train_df, valid_df = train_test_split(df, stratify=df["artist"].values)
+                    else:
+                        train_df, valid_df = train_test_split(df, stratify=df["label"].values)
                 train_transform = create_transform(config, is_train=True)    
                 # label_map = {int(k): v for k, v in label_map.items()}
                 val_transform = create_transform(config, is_train=False)

@@ -488,9 +488,10 @@ def main():
                         'global_step': global_step,
                         'config': config.as_dict(),
                     }
-                print("improve {} from {} save checkpoint!".format(best_acc,acc1))
-                best_acc = acc1
-                checkpointer.save(f'checkpoint_bestacc', **checkpoint_config)
+                if get_rank() == 0:
+                    print("improve {} from {} save checkpoint!".format(best_acc,acc1))
+                    best_acc = acc1
+                    checkpointer.save(f'checkpoint_bestacc', **checkpoint_config)
 
     tensorboard_writer.close()
     tensorboard_writer2.close()

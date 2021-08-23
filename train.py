@@ -5,10 +5,10 @@ import pathlib
 import time
 
 
-# try:
-#     import apex
-# except ImportError:
-#     pass
+try:
+    import apex
+except ImportError:
+    pass
 import numpy as np
 import torch
 import torch.nn as nn
@@ -27,7 +27,7 @@ from pytorch_image_classification import (
     create_model,
     get_files,
     create_optimizer,
-    create_scheduler,
+    create_scheduler,discriminative_lr_params,
     prepare_dataloader,
     get_default_config,
     update_config,
@@ -485,7 +485,10 @@ def main():
     logger.info(f'MACs   : {macs}')
     logger.info(f'#params: {n_params}')
 
-    optimizer = create_optimizer(config, model)
+    params=lr_arr=None
+    if config.scheduler.type == 'cyclicLR':
+        params, lr_arr, _ = discriminative_lr_params(model, slice(1e-5))
+    optimizer = create_optimizer(config, model,params=params)
     if config.device != 'cpu' and config.train.use_apex:
         model, optimizer = apex.amp.initialize(
             model, optimizer, opt_level=config.train.precision)
@@ -497,7 +500,7 @@ def main():
                                  steps_per_epoch=len(train_clean))
     else:
       scheduler = create_scheduler(config,
-                                  optimizer,
+                                  optimizer,base_lr=lr_arr,
                                   steps_per_epoch=len(train_loader))
     checkpointer = Checkpointer(model,
                                 optimizer=optimizer,
