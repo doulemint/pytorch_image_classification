@@ -1,5 +1,6 @@
 # import albumentations.augmentations.functional as F
 import numpy as np
+import random
 import cv2
 from albumentations.core.transforms_interface import ImageOnlyTransform
 
@@ -14,13 +15,14 @@ class StepcropAlbu(ImageOnlyTransform):
         uint8, float32
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self,n=8, *args, **kwargs):
         super(StepcropAlbu, self).__init__(*args, **kwargs)
+        self.n = n
 
-    def apply(self, img, **params):
-        return self.DataAugmentation3(img)
+    def apply(self, img,**params):
+        return self.DataAugmentation3(img,self.n)
 
-    def DataAugmentation3(self,image):
+    def DataAugmentation3(self,image,n=8):
         n = 8
         im_list = []
         iv_list = []
@@ -57,12 +59,12 @@ class StepcropAlbu(ImageOnlyTransform):
         img = cv2.hconcat([im_v,im_h])
         return img
 
-class CornerCrop():
+class CornerCrop(ImageOnlyTransform):
     
     def __init__(self, *args, **kwargs):
-        super(StepcropAlbu, self).__init__(*args, **kwargs)
+        super(CornerCrop, self).__init__(*args, **kwargs)
 
-    def __call__(self,img):
+    def apply(self, img, **params):
         return self.DataAugmentation3(img)
 
     def DataAugmentation3(self,image):
@@ -104,4 +106,38 @@ class CornerCrop():
             img = cv2.hconcat([im_v,im_h])
         except Exception as e:
             print(str(e))
+        return img
+
+
+
+class RandomCropStitch(ImageOnlyTransform):
+    
+    def __init__(self, *args, **kwargs):
+        super(RandomCropStitch, self).__init__(*args, **kwargs)
+
+    def apply(self, img, **params):
+        return self.DataAugmentation3(img)
+
+    def DataAugmentation3(self,image):
+        n = 8
+        num = 16
+        im_list = []
+        patch_scale = 1/n 
+        smaller_dim = np.min(image.shape[0:2])
+        patch_size = int(patch_scale * smaller_dim)
+        #print(patch_size)
+        for i in range(num):
+            rang = smaller_dim - patch_size
+            patch_x = random.randrange(0,rang);
+            patch_y = random.randrange(0,rang);
+            patch_image = image[patch_x:patch_x+patch_size,patch_y:patch_y+patch_size]
+            # patch_image = zoomin(patch_image,3)
+            im_list.append(patch_image)
+        im_l = im_list[0:7]
+        #print(len(im_l))
+        im_h = cv2.vconcat(im_list[7:-1]);
+        width = patch_size*7
+        image = cv2.resize(image,(width,width))
+        im_v = cv2.vconcat([image,cv2.hconcat(im_l)])
+        img = cv2.hconcat([im_v,im_h])
         return img

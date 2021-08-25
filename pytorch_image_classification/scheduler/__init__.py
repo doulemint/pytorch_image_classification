@@ -61,6 +61,7 @@ def _create_main_scheduler(config, main_steps):
 def create_scheduler(config, optimizer, steps_per_epoch,base_lr=None):
     if config.scheduler.type == 'cyclicLR':
         scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer,base_lr=list(base_lr),max_lr=list(base_lr*100))
+        return scheduler
     if config.scheduler.type == 'CosineAnnealing':
         scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
                             optimizer, 

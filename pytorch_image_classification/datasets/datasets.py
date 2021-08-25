@@ -275,16 +275,18 @@ def create_dataset(config: yacs.config.CfgNode,
                 raise ValueError() 
         else:
             if config.dataset.type == 'df':
-              if config.dataset.subname == 'K100':
+              
                 df = pd.read_csv(config.dataset.cvsfile_train)
-                label_map = getLabelmap(df['artist'])
+                if config.dataset.subname == 'K100':
+                    label_map = getLabelmap(df['artist'])
+                else:
+                    label_map = getLabelmap(df['label'])
                 df = pd.read_csv(config.dataset.cvsfile_test)
                 val_transform = create_transform(config, is_train=False)
                 valid_ds = Data(df,label_map,config,val_transform)
                 
                 return valid_ds
-              else:
-                raise ValueError()
+              
             dataset_dir = pathlib.Path(config.dataset.dataset_dir).expanduser()
             val_transform = create_transform(config, is_train=False)
             val_dataset = torchvision.datasets.ImageFolder(dataset_dir / 'val',

@@ -31,7 +31,7 @@ from .transforms import RandomResizeCrop as tRandomResizeCrop
 from .transforms import RandomHorizontalFlip as tRandomHorizontalFlip
 from .transforms import StepCrop
 
-from .stepcrop import CornerCrop
+from .stepcrop import CornerCrop,SmallpatchCrop
 from .stepcrop import StepcropAlbu
 from albumentations import (
     HorizontalFlip, VerticalFlip, Rotate, ShiftScaleRotate, RandomBrightnessContrast, Perspective, CLAHE, 
@@ -133,7 +133,7 @@ def create_imagenet_transform(config: yacs.config.CfgNode,
             ]
             if config.augmentation.use_step_crop:
                 transforms.append(
-                    OneOf([StepcropAlbu(p=0.5),CornerCrop(p=1)]))
+                    OneOf([CornerCrop(p=1),StepcropAlbu(p=0.5),StepcropAlbu(p=0.7,n=16)]))
             transforms.extend([Resize(config.dataset.image_size, config.dataset.image_size),
             Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225], max_pixel_value=255.0, p=1.0),
             ToTensorV2(p=1.0),])
