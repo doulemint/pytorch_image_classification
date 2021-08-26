@@ -28,6 +28,8 @@ def compute_accuracy(config, outputs, targets, augmentation, topk=(1, )):
             outputs1, outputs2 = outputs[:, 0], outputs[:, 1]
             accs = accuracy((outputs1 + outputs2) / 2, targets, topk)
         else:
+            if targets.dim() != 1:
+                targets = torch.max(targets, dim=1)[1]
             accs = accuracy(outputs, targets, topk)
     else:
         accs = accuracy(outputs, targets, topk)

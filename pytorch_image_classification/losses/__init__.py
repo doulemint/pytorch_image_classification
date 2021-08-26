@@ -1,7 +1,9 @@
 from typing import Callable, Tuple
 
 import torch.nn as nn
+import torch.nn.functional as F
 import yacs.config
+import torch
 
 from .cutmix import CutMixLoss
 from .mixup import MixupLoss
@@ -32,6 +34,16 @@ def create_multitask_loss(config: yacs.config.CfgNode)-> Tuple[Callable, Callabl
     val_loss = MultitaskLoss(criterion=tst_criterion,reduction='mean',main_weight=1)
     return train_loss, val_loss
 
+class cross_entropy_with_soft_target:
+    def __init__(self):
+        pass
+
+    def __call__(self, predictions: torch.Tensor,
+                 targets: torch.Tensor) -> torch.Tensor:
+        return torch.mean(torch.sum(- targets + F.log_softmax(predictions), 1))
+
+    
+
 def create_loss(config: yacs.config.CfgNode) -> Tuple[Callable, Callable]:
 
     if config.augmentation.use_mixup:
@@ -47,6 +59,8 @@ def create_loss(config: yacs.config.CfgNode) -> Tuple[Callable, Callable]:
     elif config.augmentation.use_focal_loss:
         # myalpha =  
         train_loss = FocalLoss(alpha=[1]*config.dataset.n_classes,num_classes=config.dataset.n_classes)
+    elif config.augmentation.use_soft_target:
+        train_loss = cross_entropy_with_soft_target()
     else:
         train_loss = nn.CrossEntropyLoss(reduction='mean')
     val_loss = nn.CrossEntropyLoss(reduction='mean')

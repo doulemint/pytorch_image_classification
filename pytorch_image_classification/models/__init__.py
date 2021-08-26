@@ -15,9 +15,10 @@ def set_parameter_requires_grad(model, feature_extracting):
     if feature_extracting:
         model = model
         for param in model.parameters():
+            # print(param)
             param.requires_grad = False
 
-def get_model(configs,feature_extract=False):
+def get_model(configs,feature_extract=False,dropout=0.4):
     if configs.model.name.startswith("resnext50_32x4d"):
         # model = torchvision.models.resnext50_32x4d(pretrained=True)
         # model.avgpool = nn.AdaptiveAvgPool2d(1)
@@ -68,20 +69,21 @@ def get_model(configs,feature_extract=False):
             model.load_state_dict(torch.load(configs.pretrain_pth))
         else:
             model = models.resnet34(pretrained=True)
-        set_parameter_(model, feature_extract)
+        set_parameter_requires_grad(model, feature_extract)
         n_features = 512
         model.avgpool = nn.AdaptiveAvgPool2d(1)
         model.fc = nn.Linear(512, configs.dataset.n_classes)
 
     elif configs.model.name.startswith("resnet50"):
-        model = models.resnet50(pretrained=True)
-        set_parameter_requires_grad(model, feature_extract)
-        model.avgpool = nn.AdaptiveAvgPool2d(1)
-        model.fc = nn.Linear(2048, configs.dataset.n_classes)
+        # model = models.resnet50(pretrained=True)
+        
+        # model.avgpool = nn.AdaptiveAvgPool2d(1)
+        # model.fc = nn.Linear(2048, configs.dataset.n_classes)
         # print(model.relu)
 
         model = timm.create_model("resnet50", pretrained=True)
-        model.fc = nn.Linear(model.fc.in_features, configs.num_classes)
+        set_parameter_requires_grad(model, feature_extract)
+        model.fc = nn.Linear(model.fc.in_features, configs.dataset.n_classes)
 
     elif configs.model.name.startswith("efficientnet-b0"):
         model = timm.create_model('tf_efficientnet_b0_ns', pretrained=True)
@@ -98,13 +100,14 @@ def get_model(configs,feature_extract=False):
         model.classifier = nn.Linear(model.classifier.in_features, configs.dataset.n_classes)
     elif configs.model.name.startswith("efficientnet-b4"):
         #model = timm.create_model('tf_efficientnet_b4_ns', pretrained=True, num_classes=configs.num_classes, drop_path_rate=configs.drop_out_rate)  # drop_path_rate=0.2~0.5
-        model = timm.create_model('tf_efficientnet_b4_ns', pretrained=True, num_classes=configs.dataset.n_classes)
+        model = timm.create_model('tf_efficientnet_b4_ns',drop_rate=dropout, pretrained=True, num_classes=configs.dataset.n_classes)
         set_parameter_requires_grad(model, feature_extract)
         model.classifier = nn.Linear(model.classifier.in_features, configs.dataset.n_classes)
     elif configs.model.name.startswith("efficientnet-b5"):
-        model = timm.create_model('tf_efficientnet_b5_ns', pretrained=True, num_classes=configs.dataset.n_classes, drop_path_rate=0.2)
+        model = timm.create_model('tf_efficientnet_b5_ns',drop_rate=dropout, pretrained=True, num_classes=configs.dataset.n_classes, drop_path_rate=0.2)
         set_parameter_requires_grad(model, feature_extract)
         model.classifier = nn.Linear(model.classifier.in_features, configs.dataset.n_classes)
+        model.classifier.weight.requires_grad_(True)
     elif configs.model.name.startswith("vit_base_patch16_384"):
         model = timm.create_model('vit_base_patch16_384', pretrained=True, num_classes=configs.dataset.n_classes)  # , drop_rate=0.1)
         set_parameter_requires_grad(model, feature_extract)
@@ -187,7 +190,7 @@ def create_model(config: yacs.config.CfgNode) -> nn.Module:
             set_parameter_requires_grad(model, False)
             model.fc = nn.Linear(512, config.dataset.n_classes)
         elif config.model.name:
-            model = get_model(config)
+            model = get_model(config,feature_extract=True)
         else:
             raise Exception('pretrain model not aviliable')
             

@@ -10,6 +10,7 @@ import pandas as pd
 import json,cv2
 
 from torch.utils.data import Dataset
+import torch.nn.functional as F
 from sklearn.model_selection import train_test_split
 
 from pytorch_image_classification import create_transform
@@ -114,7 +115,7 @@ class LabelData(Dataset):
         return img, [label1,label2,label3]
 
 class MyDataset(Dataset):
-    def __init__(self, df, data_root, transforms=None, output_label=True):
+    def __init__(self, df, data_root, transforms=None, output_label=True,soft=False,n_class=50):
         
         super().__init__()
         self.df = df.reset_index(drop=True).copy()
@@ -125,6 +126,8 @@ class MyDataset(Dataset):
         
         if output_label == True:
             self.labels = self.df['label'].values
+        if soft==True:
+            self.labels = np.identity(n_class)[self.labels].astype(np.float32)
             
     def __len__(self):
         return self.df.shape[0]
@@ -144,6 +147,36 @@ class MyDataset(Dataset):
             return img, target
         else:
             return img
+
+#append unlabel data and pesudo labels
+class pesudoMyDataset(MyDataset):
+    def __init__(self, df,unlabel_df, data_root,model, device,soft=False,transforms=None, output_label=True,n_class=50):
+        
+        super(pesudoMyDataset, self).__init__(
+            df=df, data_root=data_root,transforms=transforms,soft=soft,n_class=n_class)
+        self.df=pd.concat([self.df,unlabel_df]).reset_index(drop=True).copy()
+        self.transforms = transforms
+        self.data_root = data_root
+        
+        self.output_label = output_label
+        self.labels=list(self.labels)
+        
+        if output_label == True:
+            for image in unlabel_df['filename'].values:
+                #normalize
+                image=get_img2("{}".format(image))
+                image = np.array((image.transpose(2,0,1)-127.5)/127.5,dtype=np.float32)
+                with torch.no_grad():
+                    output = model(torch.from_numpy(image).unsqueeze(0).to(device))
+                if soft is True:
+                    logit = F.softmax(output,dim=1).squeeze(0).cpu().numpy()
+                else:
+                    logit = torch.max(output,dim=1)[1].item()
+
+                self.labels.append(logit)
+            
+        print(self.labels[-10:])
+
 
 class Data(Dataset):
     def __init__(self, df: pd.DataFrame,label_map,configs, transforms=None):
