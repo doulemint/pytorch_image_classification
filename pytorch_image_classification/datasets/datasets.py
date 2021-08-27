@@ -7,7 +7,7 @@ import torch
 import torchvision
 import yacs.config
 import pandas as pd
-import json,cv2
+import json,cv2,pickle
 
 from torch.utils.data import Dataset
 import torch.nn.functional as F
@@ -24,7 +24,7 @@ from PIL import Image
 import numpy as np
 from itertools import chain
 
-def get_files(root,mode):
+def get_files(root,mode,label_map_dir):
     if mode == "test":
         files = []
         for img in os.listdir(root):
@@ -43,14 +43,19 @@ def get_files(root,mode):
             print("loading train dataset")
         else:
             raise Exception("Only have mode train/val/test, please check !!!")
-        label_dict={}
-        for file in tqdm(all_images):
-            all_data_path.append(file)
-            name=file.split(os.sep)[-2] #['', 'data', 'nextcloud', 'dbc2017', 'files', 'images', 'train', 'Diego_Rivera', 'Diego_Rivera_21.jpg']
-            # print(name)
-            if name not in label_dict:
-                label_dict[name]=len(label_dict)
-            labels.append(label_dict[name])
+        if os.path.exists(label_map_dir):
+            with open(label_map_dir, 'rb')  as f:
+                label_dict=pickle.load(f)
+        else:
+            label_dict={}
+            for file in tqdm(all_images):
+                all_data_path.append(file)
+                name=file.split(os.sep)[-2] #['', 'data', 'nextcloud', 'dbc2017', 'files', 'images', 'train', 'Diego_Rivera', 'Diego_Rivera_21.jpg']
+                # print(name)
+                if name not in label_dict:
+                    label_dict[name]=len(label_dict)
+                labels.append(label_dict[name])
+            pickle.dump(label_dict,open(label_map_dir, 'wb'))
             # labels.append(int(file.split(os.sep)[-2]))
         print(label_dict)
         all_files = pd.DataFrame({"filename": all_data_path, "label": labels})
@@ -115,7 +120,7 @@ class LabelData(Dataset):
         return img, [label1,label2,label3]
 
 class MyDataset(Dataset):
-    def __init__(self, df, data_root, transforms=None, output_label=True,soft=False,n_class=50):
+    def __init__(self, df, data_root, transforms=None, output_label=True,soft=False,n_class=50,label_smooth=False,epsilon=0.2):
         
         super().__init__()
         self.df = df.reset_index(drop=True).copy()
@@ -128,6 +133,9 @@ class MyDataset(Dataset):
             self.labels = self.df['label'].values
         if soft==True:
             self.labels = np.identity(n_class)[self.labels].astype(np.float32)
+            if label_smooth:
+                self.labels = self.labels*(1 - epsilon)+ np.ones_like(self.labels) * epsilon / n_class
+
             
     def __len__(self):
         return self.df.shape[0]
@@ -149,11 +157,12 @@ class MyDataset(Dataset):
             return img
 
 #append unlabel data and pesudo labels
+#todo: acce this part
 class pesudoMyDataset(MyDataset):
-    def __init__(self, df,unlabel_df, data_root,model, device,soft=False,transforms=None, output_label=True,n_class=50):
+    def __init__(self, df,unlabel_df, data_root,model, device,soft=False,transforms=None, output_label=True,n_class=50,label_smooth=False,epsilon=0.2):
         
         super(pesudoMyDataset, self).__init__(
-            df=df, data_root=data_root,transforms=transforms,soft=soft,n_class=n_class)
+            df=df, data_root=data_root,transforms=transforms,soft=soft,n_class=n_class,label_smooth=label_smooth,epsilon=epsilon)
         self.df=pd.concat([self.df,unlabel_df]).reset_index(drop=True).copy()
         self.transforms = transforms
         self.data_root = data_root
@@ -161,21 +170,25 @@ class pesudoMyDataset(MyDataset):
         self.output_label = output_label
         self.labels=list(self.labels)
         
+        images=[]
         if output_label == True:
-            for image in unlabel_df['filename'].values:
-                #normalize
+            for i,image in enumerate(unlabel_df['filename'].values):
                 image=get_img2("{}".format(image))
-                image = np.array((image.transpose(2,0,1)-127.5)/127.5,dtype=np.float32)
-                with torch.no_grad():
-                    output = model(torch.from_numpy(image).unsqueeze(0).to(device))
-                if soft is True:
-                    logit = F.softmax(output,dim=1).squeeze(0).cpu().numpy()
-                else:
-                    logit = torch.max(output,dim=1)[1].item()
-
-                self.labels.append(logit)
-            
-        print(self.labels[-10:])
+                image=self.transforms(image=image)['image'].numpy()
+                # image = np.array((image.transpose(2,0,1)-127.5)/127.5,dtype=np.float32)
+                images.append(image)
+                if (i%64==0 and i!=0) or i==len(unlabel_df['filename'].values)-1: 
+                    with torch.no_grad():
+                        output = model(torch.from_numpy(np.array(images)).to(device))
+                    if soft is True:
+                        logit = F.softmax(output,dim=1).squeeze(0).cpu().numpy()
+                    else:
+                        logit = torch.max(output,dim=1)[1].item()
+                    images=[]
+                    self.labels.extend(logit)
+                #normalize
+                       
+        # print(self.labels[-10:])
 
 
 class Data(Dataset):

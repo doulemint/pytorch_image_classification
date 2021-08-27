@@ -10,7 +10,7 @@ from .mixup import MixupLoss
 from .ricap import RICAPLoss
 from .focal_loss import FocalLoss
 from .dual_cutout import DualCutoutLoss
-from .label_smoothing import LabelSmoothingLoss
+from .label_smoothing import LabelSmoothingLoss,cross_entropy_with_soft_target
 
 class MultitaskLoss:
     def __init__(self, criterion:Callable,reduction: str, main_weight: int):
@@ -34,14 +34,6 @@ def create_multitask_loss(config: yacs.config.CfgNode)-> Tuple[Callable, Callabl
     val_loss = MultitaskLoss(criterion=tst_criterion,reduction='mean',main_weight=1)
     return train_loss, val_loss
 
-class cross_entropy_with_soft_target:
-    def __init__(self):
-        pass
-
-    def __call__(self, predictions: torch.Tensor,
-                 targets: torch.Tensor) -> torch.Tensor:
-        return torch.mean(torch.sum(- targets + F.log_softmax(predictions), 1))
-
     
 
 def create_loss(config: yacs.config.CfgNode) -> Tuple[Callable, Callable]:
@@ -60,7 +52,7 @@ def create_loss(config: yacs.config.CfgNode) -> Tuple[Callable, Callable]:
         # myalpha =  
         train_loss = FocalLoss(alpha=[1]*config.dataset.n_classes,num_classes=config.dataset.n_classes)
     elif config.augmentation.use_soft_target:
-        train_loss = cross_entropy_with_soft_target()
+        train_loss = cross_entropy_with_soft_target(reduction='mean')
     else:
         train_loss = nn.CrossEntropyLoss(reduction='mean')
     val_loss = nn.CrossEntropyLoss(reduction='mean')

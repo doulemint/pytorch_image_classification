@@ -112,13 +112,15 @@ def main():
     else:
         num_workers=2
 
-    labeled_dataset = MyDataset(train_frame, data_root, transforms=create_transform(config, is_train=False), output_label=True)
+    soft=True
+    
+    labeled_dataset = MyDataset(train_frame, data_root, transforms=create_transform(config, is_train=False), output_label=True,soft=soft)
     labeled_dataloader = DataLoader(labeled_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
     test_dataset = MyDataset(get_files(config.dataset.dataset_dir+'val/','train'),config.dataset.dataset_dir+'val/',transforms=create_transform(config, is_train=False))
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size, num_workers=num_workers)
 
     
-    soft=True
+    
     best_acc=0
 
     if baseline==1:
@@ -173,7 +175,8 @@ def main():
     else:
         for i in range(len(models_opt)):
             best_acc=0
-            ckp_pth=str(output_dir)+'/baseline/'+f'checkpoint_{models_opt[i]}.pth'
+            ckp_pth= config.test.checkpoint+f'checkpoint_{models_opt[i]}.pth'
+            print(ckp_pth)
             if os.path.exists(ckp_pth):
                 checkpoint = torch.load(ckp_pth, map_location='cpu')
                 if isinstance(models[i],
@@ -217,12 +220,14 @@ def main():
             models[i]=model
             if i!=0:
                 if soft:
-                    pseudo_labeled_dataloader = DataLoader(pesudoMyDataset(train_frame, test_frame,data_root, models[i - 1], device, transforms=create_transform(config, is_train=True), soft=True,n_class=config.dataset.n_classes), batch_size=batch_size, shuffle=True, num_workers=num_workers)
+                    pseudo_labeled_dataloader = DataLoader(pesudoMyDataset(train_frame, test_frame,data_root, models[i - 1], device, transforms=create_transform(config, is_train=True), soft=True,n_class=config.dataset.n_classes,label_smooth=config.augmentation.use_label_smoothing,epsilon=config.augmentation.label_smoothing.epsilon), batch_size=batch_size, shuffle=True, num_workers=num_workers)
                 else:
-                    pseudo_labeled_dataloader = DataLoader(pesudoMyDataset(train_frame, test_frame,data_root, models[i - 1], device, transforms=create_transform(config, is_train=True), soft=False,n_class=config.dataset.n_classes), batch_size=batch_size, shuffle=True, num_workers=num_workers)
+                    pseudo_labeled_dataloader = DataLoader(pesudoMyDataset(train_frame, test_frame,data_root, models[i - 1], device, transforms=create_transform(config, is_train=True), soft=False,n_class=config.dataset.n_classes,label_smooth=config.augmentation.use_label_smoothing,epsilon=config.augmentation.label_smoothing.epsilon), batch_size=batch_size, shuffle=True, num_workers=num_workers)
 
             for j in range(config.scheduler.epochs):
-                if i == 0:
+                if i == 0 or i == 1:
+                    # if j!=0:
+                    #     break
                     continue
                     train(j,config,model,optimizer,scheduler,train_loss,labeled_dataloader, logger, tensorboard_writer,tensorboard_writer2)
                 else:       

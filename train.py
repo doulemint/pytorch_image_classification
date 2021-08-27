@@ -464,7 +464,7 @@ def main():
     if config.train.use_kfold==False:
         if config.augmentation.use_albumentations:
             if config.dataset.type=='dir':
-                train_clean = get_files(config.dataset.dataset_dir+'train/','train')
+                train_clean = get_files(config.dataset.dataset_dir+'train/','train',output_dir/'label_map.pkl')
                 sss = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=0)
                 for trn_idx, val_idx in sss.split(train_clean['filename'], train_clean['label']):
                     train_loader, val_loader = prepare_dataloader(train_clean, trn_idx, val_idx,config, data_root=config.dataset.dataset_dir)

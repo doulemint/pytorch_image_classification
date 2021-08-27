@@ -22,6 +22,17 @@ def cross_entropy_loss(data: torch.Tensor, target: torch.Tensor,
         raise ValueError(
             '`reduction` must be one of \'none\', \'mean\', or \'sum\'.')
 
+class cross_entropy_with_soft_target:
+    def __init__(self,reduction: str):
+        self.reduction = reduction
+
+    def __call__(self, predictions: torch.Tensor,
+                 targets: torch.Tensor) -> torch.Tensor:
+        # print(targets.shape)
+        # print(predictions.shape)
+        # return torch.mean(torch.sum(-targets + F.log_softmax(predictions, dim=1), 1))
+        return cross_entropy_loss(predictions, targets, self.reduction)
+
 
 class LabelSmoothingLoss:
     def __init__(self, config: yacs.config.CfgNode, reduction: str):
@@ -39,3 +50,4 @@ class LabelSmoothingLoss:
             device) * self.epsilon / self.n_classes
         loss = cross_entropy_loss(predictions, targets, self.reduction)
         return loss
+
