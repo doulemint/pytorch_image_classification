@@ -120,12 +120,13 @@ class LabelData(Dataset):
         return img, [label1,label2,label3]
 
 class MyDataset(Dataset):
-    def __init__(self, df, data_root, transforms=None, output_label=True,soft=False,n_class=50,label_smooth=False,epsilon=0.2):
+    def __init__(self, df, data_root, transforms=None, output_label=True,soft=False,n_class=50,label_smooth=False,epsilon=0.2,is_df=False):
         
         super().__init__()
         self.df = df.reset_index(drop=True).copy()
         self.transforms = transforms
         self.data_root = data_root
+        self.is_df=is_df
         
         self.output_label = output_label
         
@@ -146,7 +147,10 @@ class MyDataset(Dataset):
             target = self.labels[index]
           
         # img  = get_img("{}/{}".format(self.data_root, self.df.loc[index]['filename']))
-        img  = get_img2("{}".format(self.df.loc[index]['filename']))
+        if self.is_df:
+            img  = get_img2("{}".format(self.df.loc[index]['file']))
+        else:
+            img  = get_img2("{}".format(self.df.loc[index]['filename']))
 
         if self.transforms:
             img = self.transforms(image=img)['image']
@@ -159,25 +163,28 @@ class MyDataset(Dataset):
 #append unlabel data and pesudo labels
 #todo: acce this part
 class pesudoMyDataset(MyDataset):
-    def __init__(self, df,unlabel_df, data_root,model, device,soft=False,transforms=None, output_label=True,n_class=50,label_smooth=False,epsilon=0.2):
+    def __init__(self, df,unlabel_df, data_root,model, device,soft=False,transforms=None, output_label=True,n_class=50,label_smooth=False,epsilon=0.2,is_df=False):
         
         super(pesudoMyDataset, self).__init__(
-            df=df, data_root=data_root,transforms=transforms,soft=soft,n_class=n_class,label_smooth=label_smooth,epsilon=epsilon)
+            df=df, data_root=data_root,transforms=transforms,soft=soft,n_class=n_class,label_smooth=label_smooth,epsilon=epsilon,is_df=is_df)
         self.df=pd.concat([self.df,unlabel_df]).reset_index(drop=True).copy()
         self.transforms = transforms
         self.data_root = data_root
         
         self.output_label = output_label
         self.labels=list(self.labels)
+        names='filename'
+        if is_df:
+            names='file'
         
         images=[]
         if output_label == True:
-            for i,image in enumerate(unlabel_df['filename'].values):
+            for i,image in enumerate(unlabel_df[names].values):
                 image=get_img2("{}".format(image))
                 image=self.transforms(image=image)['image'].numpy()
                 # image = np.array((image.transpose(2,0,1)-127.5)/127.5,dtype=np.float32)
                 images.append(image)
-                if (i%64==0 and i!=0) or i==len(unlabel_df['filename'].values)-1: 
+                if (i%64==0 and i!=0) or i==len(unlabel_df[names].values)-1: 
                     with torch.no_grad():
                         output = model(torch.from_numpy(np.array(images)).to(device))
                     if soft is True:

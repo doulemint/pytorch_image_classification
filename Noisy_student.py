@@ -2,11 +2,11 @@ import argparse
 import pathlib
 import time,os
 
-
 try:
     import apex
 except ImportError:
     pass
+import pandas as pd
 import numpy as np
 
 from train import train,validate,load_config
@@ -95,6 +95,14 @@ def main():
         for trn_idx, val_idx in sss.split(train_clean['filename'], train_clean['label']):
             train_frame = train_clean.loc[trn_idx]
             test_frame  = train_clean.loc[val_idx]
+        test_clean=get_files(config.dataset.dataset_dir+'val/','train')
+    elif config.dataset.type=='df':
+        train_clean =  pd.read_csv(config.dataset.cvsfile_train)
+        sss = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=0)
+        for trn_idx, val_idx in sss.split(train_clean['image'], train_clean['label']):
+            train_frame = train_clean.loc[trn_idx]
+            test_frame  = train_clean.loc[val_idx]
+        test_clean =  pd.read_csv(config.dataset.cvsfile_test)
 
 
     baseline=0
@@ -114,9 +122,12 @@ def main():
 
     soft=True
     
-    labeled_dataset = MyDataset(train_frame, data_root, transforms=create_transform(config, is_train=False), output_label=True,soft=soft)
+    labeled_dataset = MyDataset(train_frame, data_root, transforms=create_transform(config, is_train=False), output_label=True,soft=soft,
+                        n_class=config.dataset.n_classes,label_smooth=config.augmentation.use_label_smoothing,
+                        epsilon=config.augmentation.label_smoothing.epsilon,is_df=config.dataset.type=='df')
     labeled_dataloader = DataLoader(labeled_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
-    test_dataset = MyDataset(get_files(config.dataset.dataset_dir+'val/','train'),config.dataset.dataset_dir+'val/',transforms=create_transform(config, is_train=False))
+    test_dataset = MyDataset(test_clean,config.dataset.dataset_dir+'val/',
+                        transforms=create_transform(config, is_train=False),is_df=config.dataset.type=='df')
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size, num_workers=num_workers)
 
     
@@ -219,10 +230,10 @@ def main():
             # model.to(device)
             models[i]=model
             if i!=0:
-                if soft:
-                    pseudo_labeled_dataloader = DataLoader(pesudoMyDataset(train_frame, test_frame,data_root, models[i - 1], device, transforms=create_transform(config, is_train=True), soft=True,n_class=config.dataset.n_classes,label_smooth=config.augmentation.use_label_smoothing,epsilon=config.augmentation.label_smoothing.epsilon), batch_size=batch_size, shuffle=True, num_workers=num_workers)
-                else:
-                    pseudo_labeled_dataloader = DataLoader(pesudoMyDataset(train_frame, test_frame,data_root, models[i - 1], device, transforms=create_transform(config, is_train=True), soft=False,n_class=config.dataset.n_classes,label_smooth=config.augmentation.use_label_smoothing,epsilon=config.augmentation.label_smoothing.epsilon), batch_size=batch_size, shuffle=True, num_workers=num_workers)
+                pseudo_labeled_dataloader = DataLoader(pesudoMyDataset(train_frame, test_frame,data_root, models[i - 1], device, transforms=create_transform(config, is_train=True), 
+                        soft=soft,n_class=config.dataset.n_classes,label_smooth=config.augmentation.use_label_smoothing,
+                        epsilon=config.augmentation.label_smoothing.epsilon,is_df=config.dataset.type=='df'), 
+                        batch_size=batch_size, shuffle=True, num_workers=num_workers)
 
             for j in range(config.scheduler.epochs):
                 if i == 0 or i == 1:
