@@ -46,6 +46,10 @@ def get_files(root,mode,label_map_dir):
         if os.path.exists(label_map_dir):
             with open(label_map_dir, 'rb')  as f:
                 label_dict=pickle.load(f)
+            for file in tqdm(all_images):
+                all_data_path.append(file)
+                name=file.split(os.sep)[-2]
+                labels.append(label_dict[name])
         else:
             label_dict={}
             for file in tqdm(all_images):

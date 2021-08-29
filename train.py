@@ -465,6 +465,7 @@ def main():
         if config.augmentation.use_albumentations:
             if config.dataset.type=='dir':
                 train_clean = get_files(config.dataset.dataset_dir+'train/','train',output_dir/'label_map.pkl')
+                # print(train_clean.head())
                 sss = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=0)
                 for trn_idx, val_idx in sss.split(train_clean['filename'], train_clean['label']):
                     train_loader, val_loader = prepare_dataloader(train_clean, trn_idx, val_idx,config, data_root=config.dataset.dataset_dir)
@@ -568,24 +569,26 @@ def main():
             tensorboard_writer2.flush()
 
             
+            # if get_rank() == 0:
             if ((((epoch % config.train.checkpoint_period
                     == 0) or (epoch == config.scheduler.epochs))and acc1>best_acc) or acc1>best_acc):
-                if config.train.use_kfold:
-                    checkpoint_config = {
-                        'epoch': epoch,
-                        'fold':fold,
-                        'global_step': global_step,
-                        'config': config.as_dict(),
-                    }
-                else:
-                    checkpoint_config = {
-                        'epoch': epoch,
-                        'global_step': global_step,
-                        'config': config.as_dict(),
-                    }
-                print("improve {} from {} save checkpoint!".format(acc1,best_acc))
-                best_acc = acc1
-                checkpointer.save(f'checkpoint_bstacc', **checkpoint_config)
+                    if config.train.use_kfold:
+                        checkpoint_config = {
+                            'epoch': epoch,
+                            'fold':fold,
+                            'global_step': global_step,
+                            'config': config.as_dict(),
+                        }
+                    else:
+                        checkpoint_config = {
+                            'epoch': epoch,
+                            'global_step': global_step,
+                            'config': config.as_dict(),
+                        }
+                    if get_rank() == 0:
+                        logger.info(f"improve {acc1} from {best_acc} save checkpoint!")
+                        best_acc = acc1
+                        checkpointer.save(f'checkpoint_bstacc', **checkpoint_config)
 
     tensorboard_writer.close()
     tensorboard_writer2.close()

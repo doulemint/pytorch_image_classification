@@ -15,15 +15,16 @@ class StepcropAlbu(ImageOnlyTransform):
         uint8, float32
     """
 
-    def __init__(self,n=8, *args, **kwargs):
+    def __init__(self,n=8,pos=0,*args, **kwargs):
         super(StepcropAlbu, self).__init__(*args, **kwargs)
         self.n = n
+        self.pos=pos
 
     def apply(self, img,**params):
-        return self.DataAugmentation3(img,self.n)
+        return self.DataAugmentation3(img,self.n,self.pos)
 
-    def DataAugmentation3(self,image,n=8):
-        n = 8
+    def DataAugmentation3(self,image,n=8,pos=0):
+        # n = 8
         im_list = []
         iv_list = []
         patch_initial = np.array([0,0])
@@ -54,9 +55,22 @@ class StepcropAlbu(ImageOnlyTransform):
         image = cv2.resize(image,(width,width))
         im_v=cv2.hconcat(im_list)
         #print(im_v.shape)
-        im_v = cv2.vconcat([image,im_v])
-        #print(im_v.shape)
-        img = cv2.hconcat([im_v,im_h])
+        if pos==0:
+            im_v = cv2.vconcat([image,im_v])
+            #print(im_v.shape)
+            img = cv2.hconcat([im_v,im_h])
+        elif pos==1:
+            im_v = cv2.vconcat([im_v,image])
+            #print(im_v.shape)
+            img = cv2.hconcat([im_v,im_h])
+        elif pos==2:
+            im_v = cv2.vconcat([im_v,image])
+            #print(im_v.shape)
+            img = cv2.hconcat([im_h,im_v])
+        elif pos==3:
+            im_v = cv2.vconcat([image,im_v])
+            #print(im_v.shape)
+            img = cv2.hconcat([im_h,im_v])
         return img
 
 class CornerCrop(ImageOnlyTransform):

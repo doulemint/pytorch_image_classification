@@ -39,19 +39,26 @@ def create_multitask_loss(config: yacs.config.CfgNode)-> Tuple[Callable, Callabl
 def create_loss(config: yacs.config.CfgNode) -> Tuple[Callable, Callable]:
 
     if config.augmentation.use_mixup:
+        print("use mix up loss")
         train_loss = MixupLoss(reduction='mean')
     elif config.augmentation.use_ricap:
+        print("use ricap loss")
         train_loss = RICAPLoss(reduction='mean')
     elif config.augmentation.use_cutmix:
+        print("use cut mix loss")
         train_loss = CutMixLoss(reduction='mean')
     elif config.augmentation.use_label_smoothing:
+        print("use use_label_smoothing loss")
         train_loss = LabelSmoothingLoss(config, reduction='mean')
     elif config.augmentation.use_dual_cutout:
+        print("use_dual_cutout loss")
         train_loss = DualCutoutLoss(config, reduction='mean')
     elif config.augmentation.use_focal_loss:
         # myalpha =  
+        print("use_focal_loss")
         train_loss = FocalLoss(alpha=[1]*config.dataset.n_classes,num_classes=config.dataset.n_classes)
     elif config.augmentation.use_soft_target:
+        print("use_soft_target loss")
         train_loss = cross_entropy_with_soft_target(reduction='mean')
     else:
         train_loss = nn.CrossEntropyLoss(reduction='mean')

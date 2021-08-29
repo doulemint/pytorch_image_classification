@@ -90,15 +90,15 @@ def main():
     batch_size=config.train.batch_size
 
     if config.dataset.type=='dir':
-        train_clean = get_files(data_root,'train')
-        sss = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=0)
+        train_clean = get_files(data_root,'train',output_dir/'label_map.yaml')
+        sss = StratifiedShuffleSplit(n_splits=1, test_size=0.5, random_state=0)
         for trn_idx, val_idx in sss.split(train_clean['filename'], train_clean['label']):
             train_frame = train_clean.loc[trn_idx]
             test_frame  = train_clean.loc[val_idx]
-        test_clean=get_files(config.dataset.dataset_dir+'val/','train')
+        test_clean=get_files(config.dataset.dataset_dir+'val/','train',output_dir/'label_map.yaml')
     elif config.dataset.type=='df':
         train_clean =  pd.read_csv(config.dataset.cvsfile_train)
-        sss = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=0)
+        sss = StratifiedShuffleSplit(n_splits=1, test_size=0.5, random_state=0)
         for trn_idx, val_idx in sss.split(train_clean['image'], train_clean['label']):
             train_frame = train_clean.loc[trn_idx]
             test_frame  = train_clean.loc[val_idx]
@@ -186,8 +186,8 @@ def main():
     else:
         for i in range(len(models_opt)):
             best_acc=0
-            ckp_pth= config.test.checkpoint+f'checkpoint_{models_opt[i]}.pth'
-            print(ckp_pth)
+            ckp_pth= config.test.checkpoint+f'/checkpoint_{models_opt[i]}.pth'
+            # print(ckp_pth)
             if os.path.exists(ckp_pth):
                 checkpoint = torch.load(ckp_pth, map_location='cpu')
                 if isinstance(models[i],
@@ -236,7 +236,7 @@ def main():
                         batch_size=batch_size, shuffle=True, num_workers=num_workers)
 
             for j in range(config.scheduler.epochs):
-                if i == 0 or i == 1:
+                if i == 0:
                     # if j!=0:
                     #     break
                     continue

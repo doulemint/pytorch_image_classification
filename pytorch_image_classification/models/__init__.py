@@ -190,7 +190,7 @@ def create_model(config: yacs.config.CfgNode) -> nn.Module:
             set_parameter_requires_grad(model, False)
             model.fc = nn.Linear(512, config.dataset.n_classes)
         elif config.model.name:
-            model = get_model(config,feature_extract=True)
+            model = get_model(config)#,feature_extract=True
         else:
             raise Exception('pretrain model not aviliable')
             
