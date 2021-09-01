@@ -82,8 +82,16 @@ def get_model(configs,feature_extract=False,dropout=0.4):
         # print(model.relu)
 
         model = timm.create_model("resnet50", pretrained=True)
+        model.avgpool = nn.AdaptiveAvgPool2d(1)
         set_parameter_requires_grad(model, feature_extract)
-        model.fc = nn.Linear(model.fc.in_features, configs.dataset.n_classes)
+        model.fc=nn.Sequential(
+            nn.Dropout(),
+            nn.Linear(model.fc.in_features, 256),
+            nn.ReLU(),
+            nn.Linear(256, configs.dataset.n_classes)
+        )
+        model.fc.weight.requires_grad_(True)
+        # model.fc = nn.Linear(model.fc.in_features, configs.dataset.n_classes)
 
     elif configs.model.name.startswith("efficientnet-b0"):
         model = timm.create_model('tf_efficientnet_b0_ns', pretrained=True)
@@ -106,8 +114,15 @@ def get_model(configs,feature_extract=False,dropout=0.4):
     elif configs.model.name.startswith("efficientnet-b5"):
         model = timm.create_model('tf_efficientnet_b5_ns',drop_rate=dropout, pretrained=True, num_classes=configs.dataset.n_classes, drop_path_rate=0.2)
         set_parameter_requires_grad(model, feature_extract)
-        model.classifier = nn.Linear(model.classifier.in_features, configs.dataset.n_classes)
+        # model.classifier = nn.Linear(model.classifier.in_features, configs.dataset.n_classes)
+        model.classifier=nn.Sequential(
+            nn.Dropout(),
+            nn.Linear(model.classifier.in_features, 256),
+            nn.ReLU(),
+            nn.Linear(256, configs.dataset.n_classes)
+        )
         model.classifier.weight.requires_grad_(True)
+
     elif configs.model.name.startswith("vit_base_patch16_384"):
         model = timm.create_model('vit_base_patch16_384', pretrained=True, num_classes=configs.dataset.n_classes)  # , drop_rate=0.1)
         set_parameter_requires_grad(model, feature_extract)
@@ -175,6 +190,25 @@ def get_model(configs,feature_extract=False,dropout=0.4):
 
     return model #, n_features
 
+class Network(nn.Module):
+    def __init__(self, config, input_dim=1, n_classes=10):
+        super(Network, self).__init__()
+
+        self.resnet = get_model(config)
+
+        # necessary in order to use images with only 1 chnnel (MNIST and USPS data)
+        self.resnet.conv1 = nn.Conv2d(input_dim, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
+
+        self.resnet.fc = nn.Sequential(
+            nn.Dropout(),
+            nn.Linear(self.resnet.fc.in_features, 256),
+            nn.ReLU(),
+            nn.Linear(256, n_classes)
+        )
+
+    def forward(self, x):
+        x = self.resnet(x)
+        return x
 
 def create_model(config: yacs.config.CfgNode) -> nn.Module:
     if config.model.multitask:
@@ -190,7 +224,7 @@ def create_model(config: yacs.config.CfgNode) -> nn.Module:
             set_parameter_requires_grad(model, False)
             model.fc = nn.Linear(512, config.dataset.n_classes)
         elif config.model.name:
-            model = get_model(config)#,feature_extract=True
+            model = get_model(config,feature_extract=True)#
         else:
             raise Exception('pretrain model not aviliable')
             

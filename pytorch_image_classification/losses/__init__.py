@@ -11,6 +11,7 @@ from .ricap import RICAPLoss
 from .focal_loss import FocalLoss
 from .dual_cutout import DualCutoutLoss
 from .label_smoothing import LabelSmoothingLoss,cross_entropy_with_soft_target
+from .taylor_loss import TaylorCrossEntropyLoss
 
 class MultitaskLoss:
     def __init__(self, criterion:Callable,reduction: str, main_weight: int):
@@ -60,6 +61,8 @@ def create_loss(config: yacs.config.CfgNode) -> Tuple[Callable, Callable]:
     elif config.augmentation.use_soft_target:
         print("use_soft_target loss")
         train_loss = cross_entropy_with_soft_target(reduction='mean')
+    elif config.augmentation.use_taylor_loss:
+        train_loss = TaylorCrossEntropyLoss(config,n=2, smoothing=config.augmentation.label_smoothing.epsilon)
     else:
         train_loss = nn.CrossEntropyLoss(reduction='mean')
     val_loss = nn.CrossEntropyLoss(reduction='mean')

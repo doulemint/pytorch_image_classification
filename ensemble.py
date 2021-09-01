@@ -71,4 +71,5 @@ def main():
     accuracy = correct_meter.sum / len(test_loader.dataset)
     print("new acc: ",accuracy,"preds: ",preds)
 
-
+if __name__ == '__main__':
+    main()

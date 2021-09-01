@@ -10,12 +10,14 @@ import torch.nn.functional as F
 import tqdm
 
 from fvcore.common.checkpoint import Checkpointer
+from torch.utils.data import DataLoader
+from sklearn.model_selection import StratifiedKFold,StratifiedShuffleSplit
 
 from pytorch_image_classification import (
     apply_data_parallel_wrapper,
     create_dataloader,
-    create_loss,
-    create_model,
+    create_loss,create_transform,
+    create_model,get_files,
     get_default_config,
     update_config,
 )
@@ -24,6 +26,7 @@ from pytorch_image_classification.utils import (
     create_logger,
     get_rank,
 )
+from pytorch_image_classification.datasets import MyDataset
 
 
 def load_config():
@@ -102,8 +105,14 @@ def main():
                                 # logger=logger,
                                 # distributed_rank=get_rank()
     checkpointer.load(config.test.checkpoint)
-
-    test_loader = create_dataloader(config, is_train=False)
+    if config.augmentation.use_albumentations:
+            if config.dataset.type=='dir':
+                test_clean = get_files(config.dataset.dataset_dir+'val/','train',output_dir/'label_map.pkl')
+                test_dataset = MyDataset(test_clean,config.dataset.dataset_dir+'val/',
+                        transforms=create_transform(config, is_train=False),is_df=config.dataset.type=='df')
+                test_loader = DataLoader(test_dataset, batch_size=config.train.batch_size, num_workers=config.train.dataloader.num_workers)
+            else: 
+                test_loader = create_dataloader(config, is_train=False)
     _, test_loss = create_loss(config)
 
     preds, probs, labels, loss, acc = evaluate(config, model, test_loader,

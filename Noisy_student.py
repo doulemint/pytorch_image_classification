@@ -91,14 +91,14 @@ def main():
 
     if config.dataset.type=='dir':
         train_clean = get_files(data_root,'train',output_dir/'label_map.yaml')
-        sss = StratifiedShuffleSplit(n_splits=1, test_size=0.5, random_state=0)
+        sss = StratifiedShuffleSplit(n_splits=1, test_size=0.7, random_state=0)
         for trn_idx, val_idx in sss.split(train_clean['filename'], train_clean['label']):
             train_frame = train_clean.loc[trn_idx]
             test_frame  = train_clean.loc[val_idx]
         test_clean=get_files(config.dataset.dataset_dir+'val/','train',output_dir/'label_map.yaml')
     elif config.dataset.type=='df':
         train_clean =  pd.read_csv(config.dataset.cvsfile_train)
-        sss = StratifiedShuffleSplit(n_splits=1, test_size=0.5, random_state=0)
+        sss = StratifiedShuffleSplit(n_splits=1, test_size=0.7, random_state=0)
         for trn_idx, val_idx in sss.split(train_clean['image'], train_clean['label']):
             train_frame = train_clean.loc[trn_idx]
             test_frame  = train_clean.loc[val_idx]
@@ -139,6 +139,7 @@ def main():
         base_output_dir.mkdir(exist_ok=True, parents=True)
         #just run three model for 10 epoches -- baseline
         for i in range(len(models)):
+            best_acc=0
             models[i].to(device)
             macs, n_params = count_op(config, models[i])
             logger.info(f'name   : {models_opt[i]}')

@@ -1,5 +1,15 @@
 # PyTorch Image Classification
 
+### todo list
+* ns_admatch.py : admatch+noisy student semi-surpervised+pesudo_label
+* noisy_student.py : cyclic_pesudo_label
+
+#pretrain_model: 
+#original model:
+
+--resume [path to yaml file]
+记得改变config.yaml under path. 
+
 Following papers are implemented using PyTorch.
 
 * ResNet ([1512.03385](https://arxiv.org/abs/1512.03385))
@@ -305,6 +315,7 @@ python train.py --config configs/cifar/wrn.yaml \
     augmentation.use_ricap True \
     augmentation.use_random_crop False
 ```
+python -m torch.distributed.launch --nproc_per_node 2 Noisy_student.py --config configs/kfolds/efficient.yaml --resume experiments/imagenet/efficientnet-b5/exp08_SCAug_noisy device cude train.distributed True train.batch_size 16 validation.batch_size 16
 
 ##### Using 2 GPUs
 

@@ -211,6 +211,7 @@ config.augmentation.use_label_smoothing = False
 config.augmentation.use_step_crop = False
 config.augmentation.use_focal_loss = False
 config.augmentation.use_soft_target = False
+config.augmentation.use_taylor_loss = False
 
 config.augmentation.random_crop = ConfigNode()
 config.augmentation.random_crop.padding = 4
