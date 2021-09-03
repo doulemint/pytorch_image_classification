@@ -138,18 +138,20 @@ def main():
 
     if config.dataset.type=='dir':
         train_clean = get_files(data_root,'train',output_dir/'label_map.yaml')
-        sss = StratifiedShuffleSplit(n_splits=1, test_size=0.7, random_state=0)
+        sss = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=0)
         for trn_idx, val_idx in sss.split(train_clean['filename'], train_clean['label']):
             train_frame = train_clean.loc[trn_idx]
             val_frame  = train_clean.loc[val_idx]
         test_clean=get_files(config.dataset.dataset_dir+'val/','train',output_dir/'label_map.yaml')
     elif config.dataset.type=='df':
         train_clean =  pd.read_csv(config.dataset.cvsfile_train)
-        sss = StratifiedShuffleSplit(n_splits=1, test_size=0.7, random_state=0)
+        sss = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=0)
         for trn_idx, val_idx in sss.split(train_clean['image'], train_clean['label']):
             train_frame = train_clean.loc[trn_idx]
             val_frame  = train_clean.loc[val_idx]
         test_clean =  pd.read_csv(config.dataset.cvsfile_test)
+    
+    soft = False
     
     weak_labeled_dataset = MyDataset(train_frame, data_root, transforms=create_transform(config, is_train=False), output_label=True,soft=soft,
                         n_class=config.dataset.n_classes,label_smooth=config.augmentation.use_label_smoothing,
@@ -165,16 +167,37 @@ def main():
                         n_class=config.dataset.n_classes,label_smooth=config.augmentation.use_label_smoothing,
                         epsilon=config.augmentation.label_smoothing.epsilon,is_df=config.dataset.type=='df')
 
+    num_workers=config.train.dataloader.num_workers
     weak_labeled_dataloader = DataLoader(weak_labeled_dataset, batch_size=batch_size, num_workers=num_workers)
     strong_labeled_dataloader = DataLoader(strong_labeled_dataset, batch_size=batch_size, num_workers=num_workers)
     weak_unlabeled_dataloader = DataLoader(weak_unlabeled_dataset, batch_size=batch_size, num_workers=num_workers)
     strong_unlabeled_dataloader = DataLoader(strong_unlabeled_dataset, batch_size=batch_size, num_workers=num_workers)
 
     
-    student_model = ""
-    teacher_model = ["",""]
-    device = ""
+    student_model_opt = "resnet50"
+    teacher_model_opt = ["resnet50","efficientnet-b5"]
+    device = config.device
     num_epochs = config.scheduler.epochs
+    teacher_model = []
+    config.defrost()
+    for opt in teacher_model_opt:
+        config.model.name=opt
+        teacher_model.append(get_model(config))
+        ckp_pth= config.test.checkpoint+f'/checkpoint_{opt}.pth'
+        if os.path.exists(ckp_pth):
+                checkpoint = torch.load(ckp_pth, map_location='cpu')
+                if isinstance(teacher_model[-1],
+                      (nn.DataParallel, nn.parallel.DistributedDataParallel)):
+                    teacher_model[-1].module.load_state_dict(checkpoint['model'])
+                    print(f"load model from {str(ckp_pth)}")
+                else:
+                    teacher_model[-1].load_state_dict(checkpoint['model'])
+                    print(f"load model from {str(ckp_pth)}")
+        teacher_model[-1].to(device)
+    config.model.name=student_model_opt
+    student_model=get_model(config)
+    student_model.to(device)
+    config.freeze()
 
     for j in range(config.scheduler.epochs):
         loss_meter = AverageMeter()
@@ -194,8 +217,9 @@ def main():
 
             #calcutate c_tau
             row_wise_max = torch.nn.Softmax(dim=1)(student_prediction_train)
-            row_wise_max = torch.amax(row_wise_max, dim=(1, 2, 3))
-            final_sum = row_wise_max.mean(0)
+            row_wise_max = torch.max(row_wise_max)
+            final_sum=torch.mean(row_wise_max)
+            # final_sum = row_wise_max.mean(0)
             c_tau = 0.8 * final_sum
 
             pseudo_labels,test_mask=generate_pseudo_labels(
@@ -208,5 +232,8 @@ def main():
 
             loss = train_loss + (test_loss[test_mask]).mean()
             loss_meter.update(loss.cpu().item(),(num_train+test_loss.size(0)))
+
+if __name__ == '__main__':
+    main()
 
         

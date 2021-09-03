@@ -90,7 +90,8 @@ def get_model(configs,feature_extract=False,dropout=0.4):
             nn.ReLU(),
             nn.Linear(256, configs.dataset.n_classes)
         )
-        model.fc.weight.requires_grad_(True)
+        set_parameter_requires_grad(model.fc, False)
+        # model.fc.weight.requires_grad_(True)
         # model.fc = nn.Linear(model.fc.in_features, configs.dataset.n_classes)
 
     elif configs.model.name.startswith("efficientnet-b0"):
@@ -121,7 +122,8 @@ def get_model(configs,feature_extract=False,dropout=0.4):
             nn.ReLU(),
             nn.Linear(256, configs.dataset.n_classes)
         )
-        model.classifier.weight.requires_grad_(True)
+        set_parameter_requires_grad(model.classifier, False)
+        #model.classifier.weight.requires_grad_(True)
 
     elif configs.model.name.startswith("vit_base_patch16_384"):
         model = timm.create_model('vit_base_patch16_384', pretrained=True, num_classes=configs.dataset.n_classes)  # , drop_rate=0.1)
