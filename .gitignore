@@ -100,5 +100,6 @@ ENV/
 # mypy
 .mypy_cache/
 .vscode/linenote/train.py#L122.md
-.experiments/
+.experiments/*
 .pth
+*.pth
