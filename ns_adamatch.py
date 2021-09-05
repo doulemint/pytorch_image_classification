@@ -8,6 +8,8 @@ except ImportError:
     pass
 import pandas as pd
 import numpy as np
+from evaluate import evaluate
+import tensorflow as tf
 
 from train import train,validate,load_config
 from pytorch_image_classification import (
@@ -37,6 +39,7 @@ from pytorch_image_classification.utils import (
     set_seed,
     setup_cudnn,
 )
+import torch.nn.functional as F
 from pytorch_image_classification import create_transform
 from pytorch_image_classification.models import get_model
 from pytorch_image_classification.losses import cross_entropy_with_soft_target
@@ -69,18 +72,18 @@ def  generate_pseudo_labels(weak_images_train, weak_images_test, teacher_models,
         # print("final_predictions_test: ",torch.stack((preds_1, preds_2), dim=0).size())
 
         final_predictions_test = torch.stack((preds_1, preds_2), dim=0).mean(0)
-        # print("final_predictions_train: ",final_predictions_train.size())
+        # print("final_predictions_train: ",torch.nn.Softmax(dim=1)(final_predictions_train).max(1),final_predictions_train.size())
         # final_predictions_test_, _ = torch.nn.Softmax()(
         #     torch.tensor(final_predictions_test)).max(1)
         final_predictions_test_ = torch.nn.Softmax(dim=1)(final_predictions_test)
-        final_predictions_test_,_ = torch.max(final_predictions_test_,-1)
-        # print("final_predictions_test: ",final_predictions_test_.size())
+        final_predictions_test_,_ = torch.max(final_predictions_test_,dim=1)
+        # print("final_predictions_test_: ",final_predictions_test_,final_predictions_test_.size())
 
         # print("1: ",torch.sum(final_predictions_test_ > confidence_thres))
 
         # compute thresholding mask
         test_mask = final_predictions_test_ > confidence_thres
-        # print("test_mask: ",test_mask.size())
+        # print("test_mask: ",test_mask,test_mask.size())
 
         # concatenate all predictions
         all_predictions = torch.cat(
@@ -90,20 +93,30 @@ def  generate_pseudo_labels(weak_images_train, weak_images_test, teacher_models,
     return all_predictions, test_mask
 
 def compute_loss_target(predictions, pseudo_labels,gt, alpha):
-    # print("predictions: ",predictions.size())
-    # print("pseudo_labels: ",pseudo_labels.size())
+    # print("predictions: ",predictions,predictions.size())
+    # print("pseudo_labels: ",pseudo_labels,pseudo_labels.size())
+    # pseudo_labels = pseudo_labels.to(dtype=torch.long)
 
     if gt is not None:
         # print("gt: ",gt.size())
-        loss_func = cross_entropy_with_soft_target(reduction='mean')
+        # loss_func = cross_entropy_with_soft_target(reduction='mean')
+        # loss_func = tf.keras.losses.CategoricalCrossentropy()
         loss_func1=nn.CrossEntropyLoss(reduction="mean")
+        # loss_function = nn.CrossEntropyLoss()
         with torch.no_grad():
-            target_loss = loss_func(predictions,pseudo_labels)
+            # _, fk_targets = pseudo_labels.max(dim=1)
+            target_loss = loss_func1(predictions,pseudo_labels)
+            # target_loss = torch.tensor(loss_func(predictions.cpu().numpy(),pseudo_labels.cpu().numpy()).numpy())#loss_func(predictions,pseudo_labels)
             student_loss = loss_func1(predictions,gt)
+            # print("target_loss: ",target_loss," student_loss: ",student_loss)
+            # print("total loss: ",((1 - alpha) * target_loss) + (alpha * student_loss))
             return ((1 - alpha) * target_loss) + (alpha * student_loss)
     else:
-        loss_func = cross_entropy_with_soft_target(reduction='none')
+        # _, fk_targets = pseudo_labels.max(dim=1)
+        loss_func = nn.CrossEntropyLoss(reduction='none')#cross_entropy_with_soft_target(reduction='none')
+        # student_loss = loss_func(predictions,fk_targets)
         student_loss = loss_func(predictions,pseudo_labels)
+        # print("student_loss: ",student_loss)
         return student_loss
 def get_alpha(epoch, total_epochs):
     initial_alpha = 0.1
@@ -173,25 +186,18 @@ def main():
     
     soft = False
     
-    weak_labeled_dataset = MyDataset(train_frame, data_root, transforms=create_transform(config, is_train=False), output_label=True,soft=soft,
-                        n_class=config.dataset.n_classes,label_smooth=config.augmentation.use_label_smoothing,
-                        epsilon=config.augmentation.label_smoothing.epsilon,is_df=config.dataset.type=='df')
-    strong_labeled_dataset = MyDataset(train_frame, data_root, transforms=create_transform(config, is_train=True), output_label=True,soft=soft,
-                        n_class=config.dataset.n_classes,label_smooth=config.augmentation.use_label_smoothing,
-                        epsilon=config.augmentation.label_smoothing.epsilon,is_df=config.dataset.type=='df')
+    weak_labeled_dataset = MyDataset(train_frame, data_root, transforms=create_transform(config, is_train=False), output_label=True,is_df=config.dataset.type=='df')
+    strong_labeled_dataset = MyDataset(train_frame, data_root, transforms=create_transform(config, is_train=True), output_label=True,is_df=config.dataset.type=='df')
 
-    weak_unlabeled_dataset = MyDataset(val_frame, data_root, transforms=create_transform(config, is_train=False), output_label=True,soft=soft,
-                        n_class=config.dataset.n_classes,label_smooth=config.augmentation.use_label_smoothing,
-                        epsilon=config.augmentation.label_smoothing.epsilon,is_df=config.dataset.type=='df')
-    strong_unlabeled_dataset = MyDataset(val_frame, data_root, transforms=create_transform(config, is_train=True), output_label=True,soft=soft,
-                        n_class=config.dataset.n_classes,label_smooth=config.augmentation.use_label_smoothing,
-                        epsilon=config.augmentation.label_smoothing.epsilon,is_df=config.dataset.type=='df')
+    weak_unlabeled_dataset = MyDataset(val_frame, data_root, transforms=create_transform(config, is_train=False),is_df=config.dataset.type=='df')
+    strong_unlabeled_dataset = MyDataset(val_frame, data_root, transforms=create_transform(config, is_train=True),is_df=config.dataset.type=='df')
 
     num_workers=config.train.dataloader.num_workers
     weak_labeled_dataloader = DataLoader(weak_labeled_dataset, batch_size=batch_size, num_workers=num_workers)
     strong_labeled_dataloader = DataLoader(strong_labeled_dataset, batch_size=batch_size, num_workers=num_workers)
-    weak_unlabeled_dataloader = DataLoader(weak_unlabeled_dataset, batch_size=batch_size, num_workers=num_workers)
-    strong_unlabeled_dataloader = DataLoader(strong_unlabeled_dataset, batch_size=batch_size, num_workers=num_workers)
+    weak_unlabeled_dataloader = DataLoader(weak_unlabeled_dataset, batch_size=batch_size//4, num_workers=num_workers)
+    strong_unlabeled_dataloader = DataLoader(strong_unlabeled_dataset, batch_size=batch_size//4, num_workers=num_workers)
+    
     test_dataset = MyDataset(test_clean,config.dataset.dataset_dir+'val/',
                         transforms=create_transform(config, is_train=False),is_df=config.dataset.type=='df')
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size, num_workers=num_workers)
@@ -199,6 +205,11 @@ def main():
     
     student_model_opt = "resnet50"
     teacher_model_opt = ["resnet50","efficientnet-b5"]
+
+    TEMPERATURE = 10
+    log_softmax = torch.nn.LogSoftmax(dim=1)
+    kl_divergence = torch.nn.KLDivLoss(reduction="batchmean", log_target=True)
+
     device = config.device
     num_epochs = config.scheduler.epochs
     teacher_model = []
@@ -207,6 +218,7 @@ def main():
         config.model.name=opt
         teacher_model.append(get_model(config))
         ckp_pth= config.test.checkpoint+f'/checkpoint_{opt}.pth'
+        # print(ckp_pth)
         if os.path.exists(ckp_pth):
                 checkpoint = torch.load(ckp_pth, map_location='cpu')
                 if isinstance(teacher_model[-1],
@@ -223,6 +235,16 @@ def main():
         logger.info(f'#params: {n_params}')
     config.model.name=student_model_opt
     student_model=get_model(config)
+    ckp_pth= config.test.checkpoint+f'/checkpoint_{student_model_opt}.pth'
+    if os.path.exists(ckp_pth):
+      checkpoint = torch.load(ckp_pth, map_location='cpu')
+      if isinstance(student_model,
+          (nn.DataParallel, nn.parallel.DistributedDataParallel)):
+          student_model.module.load_state_dict(checkpoint['model'])
+          print(f"load model from {str(ckp_pth)}")
+      else:
+          student_model.load_state_dict(checkpoint['model'])
+          print(f"load model from {str(ckp_pth)}")
     student_model.to(device)
     macs, n_params = count_op(config, student_model)
     logger.info(f'name   : {student_model_opt}')
@@ -244,6 +266,7 @@ def main():
                                 scheduler=scheduler,
                                 save_dir=output_dir,
                                 save_to_disk=get_rank() == 0)
+    # checkpointer.load(config.test.checkpoint)
     if get_rank() == 0 and config.train.use_tensorboard:
         tensorboard_writer = create_tensorboard_writer(
                     config, output_dir, purge_step=config.train.start_epoch + 1)
@@ -255,6 +278,8 @@ def main():
     
     _, val_loss = create_loss(config)
 
+    # preds, probs, labels, loss, acc = evaluate(config, student_model, test_dataloader,
+    #                                            val_loss, logger)
     for j in range(config.scheduler.epochs):
         logger.info(f'Train {j} {global_step}')
         start = time.time()
@@ -263,9 +288,9 @@ def main():
         acc1_meter = AverageMeter()
         acc5_meter = AverageMeter()
         student_model.train()
-        step=0
-        for (weak_batch_train,weak_batch_test,strong_batch_train,strong_batch_test,) in zip(
-            weak_labeled_dataloader, weak_unlabeled_dataloader, strong_labeled_dataloader, strong_unlabeled_dataloader): 
+        # step=0
+        for step,(weak_batch_train,weak_batch_test,strong_batch_train,strong_batch_test,) in enumerate(zip(
+            weak_labeled_dataloader, weak_unlabeled_dataloader, strong_labeled_dataloader, strong_unlabeled_dataloader)): 
             step += 1
             global_step += 1
 
@@ -295,20 +320,36 @@ def main():
             student_prediction_test=student_model(strong_image_test)
             # print("student_prediction_test: ",student_prediction_test.size())
 
+            
             #calcutate c_tau
-            row_wise_max = torch.nn.Softmax(dim=1)(student_prediction_train)
-            row_wise_max,_ = torch.max(row_wise_max,-1)
+            # print("student_prediction_train",student_prediction_train)
+            row_wise_max = F.softmax(student_prediction_train, dim=1)#torch.nn.Softmax(dim=1)(student_prediction_train)
+            row_wise_max,_ = torch.max(row_wise_max,dim=1)
+            # print("row_wise_max: ",row_wise_max,row_wise_max.size())
             final_sum=torch.mean(row_wise_max)
             # final_sum = row_wise_max.mean(0)
+            # print("final_sum: ",final_sum)
             c_tau = 0.8 * final_sum
 
             pseudo_labels,test_mask=generate_pseudo_labels(
                 weak_image_train,weak_image_test,teacher_model,c_tau
             )
+            ## allign target label distribtion to student_prediction_train distribution
+            predicts=torch.cat((student_prediction_train, student_prediction_test), dim=0)
+            expectation_ratio = torch.mean(predicts) / torch.mean(pseudo_labels)
+            # print("expectation_ratio: ",expectation_ratio)
+            pseudo_labels = F.normalize((pseudo_labels*expectation_ratio), p=2, dim=1) # L2 normalization
+
+            # pseudo_labels = pseudo_labels.to(dtype=torch.long)
+            _, pseudo_labels = pseudo_labels.max(dim=1)
+            # print("loss: ",val_loss(student_prediction_train,pseudo_labels[:num_train]))
+            # print("loss1: ",kl_divergence(log_softmax(student_prediction_train / TEMPERATURE),
+            # log_softmax(pseudo_labels[:num_train] / TEMPERATURE)))
             # print("pseudo_labels: ",pseudo_labels.size())
 
             alpha = get_alpha(j, num_epochs)
             train_loss = compute_loss_target(student_prediction_train,pseudo_labels[:num_train],targets,alpha)
+            # print("loss2: ",train_loss)
             test_loss = compute_loss_target(student_prediction_test,pseudo_labels[num_train:],None,alpha)
 
             loss = train_loss + (test_loss[test_mask]).mean()
@@ -341,8 +382,8 @@ def main():
                 torch.cuda.synchronize()
         
             loss_meter.update(loss.cpu().item(),(num_train+test_loss.size(0)))
-            acc1_meter.update(acc1, num_train)
-            acc5_meter.update(acc5, num_train)
+            acc1_meter.update(acc1.cpu().item(), num_train)
+            acc5_meter.update(acc5.cpu().item(), num_train)
             
             if get_rank() == 0:
                 if step % config.train.log_period == 0 or step == len(
@@ -366,6 +407,7 @@ def main():
                                                 scheduler.get_last_lr()[0],
                                                 global_step)
             scheduler.step()
+        # print("step: ",step)
 
         logger.info(f'Epoch {j} '
                     f'loss {loss_meter.avg:.4f} '
@@ -388,7 +430,7 @@ def main():
         tensorboard_writer2.flush()
 
         if ((((j % config.train.checkpoint_period
-                    == 0) or (j == config.scheduler.epochs))and acc1>best_acc) or acc1>best_acc):
+                    == 0) or (j == config.scheduler.epochs))and acc>best_acc) or acc>best_acc):
                     checkpoint_config = {
                             'epoch': j,
                             'global_step': global_step,
