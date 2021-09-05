@@ -72,7 +72,7 @@ def  generate_pseudo_labels(weak_images_train, weak_images_test, teacher_models,
         # print("final_predictions_train: ",final_predictions_train.size())
         # final_predictions_test_, _ = torch.nn.Softmax()(
         #     torch.tensor(final_predictions_test)).max(1)
-        final_predictions_test_ = torch.nn.Softmax()(final_predictions_test)
+        final_predictions_test_ = torch.nn.Softmax(dim=1)(final_predictions_test)
         final_predictions_test_,_ = torch.max(final_predictions_test_,-1)
         # print("final_predictions_test: ",final_predictions_test_.size())
 
@@ -296,7 +296,7 @@ def main():
             # print("student_prediction_test: ",student_prediction_test.size())
 
             #calcutate c_tau
-            row_wise_max = torch.nn.Softmax()(student_prediction_train)
+            row_wise_max = torch.nn.Softmax(dim=1)(student_prediction_train)
             row_wise_max,_ = torch.max(row_wise_max,-1)
             final_sum=torch.mean(row_wise_max)
             # final_sum = row_wise_max.mean(0)
@@ -308,7 +308,7 @@ def main():
             # print("pseudo_labels: ",pseudo_labels.size())
 
             alpha = get_alpha(j, num_epochs)
-            train_loss = compute_loss_target(student_prediction_train,pseudo_labels[:num_train],target,alpha)
+            train_loss = compute_loss_target(student_prediction_train,pseudo_labels[:num_train],targets,alpha)
             test_loss = compute_loss_target(student_prediction_test,pseudo_labels[num_train:],None,alpha)
 
             loss = train_loss + (test_loss[test_mask]).mean()
