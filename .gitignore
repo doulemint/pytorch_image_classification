@@ -104,3 +104,4 @@ ENV/
 *.pth
 *.pkl
 *.npz
+*.txt

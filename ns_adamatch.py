@@ -42,7 +42,7 @@ from pytorch_image_classification.utils import (
 import torch.nn.functional as F
 from pytorch_image_classification import create_transform
 from pytorch_image_classification.models import get_model
-from pytorch_image_classification.losses import cross_entropy_with_soft_target
+from pytorch_image_classification.losses import TaylorCrossEntropyLoss
 from pytorch_image_classification.datasets import MyDataset, pesudoMyDataset
 from train import validate,send_targets_to_device
 
@@ -92,6 +92,21 @@ def  generate_pseudo_labels(weak_images_train, weak_images_test, teacher_models,
 
     return all_predictions, test_mask
 
+def cross_entropy_loss(data: torch.Tensor, target: torch.Tensor,
+                       reduction: str) -> torch.Tensor:
+    target = F.log_softmax(target,dim=1)
+    logp = F.log_softmax(data, dim=1)
+    loss = torch.sum(-logp * target, dim=1)
+    if reduction == 'none':
+        return loss
+    elif reduction == 'mean':
+        return loss.mean()
+    elif reduction == 'sum':
+        return loss.sum()
+    else:
+        raise ValueError(
+            '`reduction` must be one of \'none\', \'mean\', or \'sum\'.')
+
 def compute_loss_target(predictions, pseudo_labels,gt, alpha):
     # print("predictions: ",predictions,predictions.size())
     # print("pseudo_labels: ",pseudo_labels,pseudo_labels.size())
@@ -99,11 +114,14 @@ def compute_loss_target(predictions, pseudo_labels,gt, alpha):
 
     if gt is not None:
         # print("gt: ",gt.size())
+        loss_func1 = TaylorCrossEntropyLoss(reduction='mean')
         # loss_func = cross_entropy_with_soft_target(reduction='mean')
         # loss_func = tf.keras.losses.CategoricalCrossentropy(from_logits=True)
-        loss_func1=nn.CrossEntropyLoss(reduction="mean")
+        # loss_func1=nn.CrossEntropyLoss(reduction="mean")
         # loss_function = nn.CrossEntropyLoss()
         with torch.no_grad():
+            # target_loss  = cross_entropy_loss(predictions,pseudo_labels,'mean')
+            # student_loss = cross_entropy_loss(predictions,gt,'mean')
             # _, fk_targets = pseudo_labels.max(dim=1)
             target_loss = loss_func1(predictions,pseudo_labels)
             # target_loss = torch.tensor(loss_func(predictions.cpu().numpy(),pseudo_labels.cpu().numpy()).numpy())#loss_func(predictions,pseudo_labels)
@@ -216,7 +234,7 @@ def main():
     config.defrost()
     for opt in teacher_model_opt:
         config.model.name=opt
-        teacher_model.append(get_model(config))
+        teacher_model.append(get_model(config,pretrained=False))
         ckp_pth= config.test.checkpoint+f'/checkpoint_{opt}.pth'
         # print(ckp_pth)
         if os.path.exists(ckp_pth):
@@ -234,7 +252,7 @@ def main():
         logger.info(f'MACs   : {macs}')
         logger.info(f'#params: {n_params}')
     config.model.name=student_model_opt
-    student_model=get_model(config)
+    student_model=get_model(config,pretrained=False)
     ckp_pth= config.test.checkpoint+f'/checkpoint_{student_model_opt}.pth'
     if os.path.exists(ckp_pth):
       checkpoint = torch.load(ckp_pth, map_location='cpu')

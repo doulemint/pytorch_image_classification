@@ -18,7 +18,7 @@ def set_parameter_requires_grad(model, feature_extracting):
             # print(param)
             param.requires_grad = False
 
-def get_model(configs,feature_extract=False,dropout=0.4):
+def get_model(configs,feature_extract=False,dropout=0.4,pretrained=True):
     if configs.model.name.startswith("resnext50_32x4d"):
         # model = torchvision.models.resnext50_32x4d(pretrained=True)
         # model.avgpool = nn.AdaptiveAvgPool2d(1)
@@ -75,13 +75,13 @@ def get_model(configs,feature_extract=False,dropout=0.4):
         model.fc = nn.Linear(512, configs.dataset.n_classes)
 
     elif configs.model.name.startswith("resnet50"):
-        # model = models.resnet50(pretrained=True)
+        # model = models.resnet50(pretrained=pretrained)
         
         # model.avgpool = nn.AdaptiveAvgPool2d(1)
         # model.fc = nn.Linear(2048, configs.dataset.n_classes)
         # print(model.relu)
 
-        model = timm.create_model("resnet50", pretrained=True)
+        model = timm.create_model("resnet50", pretrained=pretrained)
         model.avgpool = nn.AdaptiveAvgPool2d(1)
         set_parameter_requires_grad(model, feature_extract)
         # model.fc=nn.Sequential(
@@ -95,7 +95,7 @@ def get_model(configs,feature_extract=False,dropout=0.4):
         model.fc = nn.Linear(model.fc.in_features, configs.dataset.n_classes)
     
     elif configs.model.name.startswith("resnet101"):
-        model = timm.create_model("resnet101", pretrained=True)
+        model = timm.create_model("resnet101", pretrained=pretrained)
         model.fc = nn.Linear(model.fc.in_features, configs.dataset.n_classes)
 
     elif configs.model.name.startswith("efficientnet-b0"):
@@ -117,7 +117,7 @@ def get_model(configs,feature_extract=False,dropout=0.4):
         set_parameter_requires_grad(model, feature_extract)
         model.classifier = nn.Linear(model.classifier.in_features, configs.dataset.n_classes)
     elif configs.model.name.startswith("efficientnet-b5"):
-        model = timm.create_model('tf_efficientnet_b5_ns',drop_rate=dropout, pretrained=True, num_classes=configs.dataset.n_classes, drop_path_rate=0.2)
+        model = timm.create_model('tf_efficientnet_b5_ns',drop_rate=dropout, pretrained=pretrained, num_classes=configs.dataset.n_classes, drop_path_rate=0.2)
         set_parameter_requires_grad(model, feature_extract)
         model.classifier = nn.Linear(model.classifier.in_features, configs.dataset.n_classes)
         # model.classifier=nn.Sequential(
