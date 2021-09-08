@@ -84,15 +84,19 @@ def get_model(configs,feature_extract=False,dropout=0.4):
         model = timm.create_model("resnet50", pretrained=True)
         model.avgpool = nn.AdaptiveAvgPool2d(1)
         set_parameter_requires_grad(model, feature_extract)
-        model.fc=nn.Sequential(
-            nn.Dropout(),
-            nn.Linear(model.fc.in_features, 256),
-            nn.ReLU(),
-            nn.Linear(256, configs.dataset.n_classes)
-        )
-        set_parameter_requires_grad(model.fc, False)
+        # model.fc=nn.Sequential(
+        #     nn.Dropout(),
+        #     nn.Linear(model.fc.in_features, 256),
+        #     nn.ReLU(),
+        #     nn.Linear(256, configs.dataset.n_classes)
+        # )
+        # set_parameter_requires_grad(model.fc, False)
         # model.fc.weight.requires_grad_(True)
-        # model.fc = nn.Linear(model.fc.in_features, configs.dataset.n_classes)
+        model.fc = nn.Linear(model.fc.in_features, configs.dataset.n_classes)
+    
+    elif configs.model.name.startswith("resnet101"):
+        model = timm.create_model("resnet101", pretrained=True)
+        model.fc = nn.Linear(model.fc.in_features, configs.dataset.n_classes)
 
     elif configs.model.name.startswith("efficientnet-b0"):
         model = timm.create_model('tf_efficientnet_b0_ns', pretrained=True)
@@ -115,14 +119,14 @@ def get_model(configs,feature_extract=False,dropout=0.4):
     elif configs.model.name.startswith("efficientnet-b5"):
         model = timm.create_model('tf_efficientnet_b5_ns',drop_rate=dropout, pretrained=True, num_classes=configs.dataset.n_classes, drop_path_rate=0.2)
         set_parameter_requires_grad(model, feature_extract)
-        # model.classifier = nn.Linear(model.classifier.in_features, configs.dataset.n_classes)
-        model.classifier=nn.Sequential(
-            nn.Dropout(),
-            nn.Linear(model.classifier.in_features, 256),
-            nn.ReLU(),
-            nn.Linear(256, configs.dataset.n_classes)
-        )
-        set_parameter_requires_grad(model.classifier, False)
+        model.classifier = nn.Linear(model.classifier.in_features, configs.dataset.n_classes)
+        # model.classifier=nn.Sequential(
+        #     nn.Dropout(),
+        #     nn.Linear(model.classifier.in_features, 256),
+        #     nn.ReLU(),
+        #     nn.Linear(256, configs.dataset.n_classes)
+        # )
+        # set_parameter_requires_grad(model.classifier, False)
         #model.classifier.weight.requires_grad_(True)
 
     elif configs.model.name.startswith("vit_base_patch16_384"):
@@ -149,6 +153,18 @@ def get_model(configs,feature_extract=False,dropout=0.4):
             timm.models.load_checkpoint(model, f'{filename}.npz')
             set_parameter_requires_grad(model, feature_extract)
             model.head = nn.Linear(model.head.in_features, configs.dataset.n_classes)
+    
+    elif configs.model.name.startswith('deit_base_patch16_224'):
+        assert timm.__version__ == "0.3.2"
+        # now load it with torchhub
+        model = torch.hub.load('facebookresearch/deit:main', 'deit_base_patch16_224', pretrained=True)
+        model.head = nn.Linear(model.head.in_features, configs.dataset.n_classes)
+    
+    elif configs.model.name.startswith('deit_base_distilled_patch16_224'):
+        assert timm.__version__ == "0.3.2"
+        # now load it with torchhub
+        model = torch.hub.load('facebookresearch/deit:main', 'deit_base_distilled_patch16_224', pretrained=True)
+        model.head = nn.Linear(model.head.in_features, configs.dataset.n_classes)
 
     elif configs.model.name == 'shufflenetv2_x0_5':  # clw modify
         model = models.shufflenet_v2_x0_5(pretrained=True)  # clw modify
@@ -226,7 +242,7 @@ def create_model(config: yacs.config.CfgNode) -> nn.Module:
             set_parameter_requires_grad(model, False)
             model.fc = nn.Linear(512, config.dataset.n_classes)
         elif config.model.name:
-            model = get_model(config,feature_extract=True)#
+            model = get_model(config)#,feature_extract=True
         else:
             raise Exception('pretrain model not aviliable')
             

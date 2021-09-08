@@ -4,6 +4,16 @@
 * ns_admatch.py : admatch+noisy student semi-surpervised+pesudo_label
 * noisy_student.py : cyclic_pesudo_label
 
+### config setting
+train.output_dir: needs '/' at the end of path
+
+### resume
+方式一 : train.py  train.checkpoint path to best.pth
+方式二 ：train.py  --resume path to experiment directory
+
+ns_adamatch.py/Noisy_student.py --resume path to experiment directory
+
+
 #pretrain_model: 
 #original model:
 

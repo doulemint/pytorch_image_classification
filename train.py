@@ -429,6 +429,7 @@ def main():
 
     set_seed(config)
     setup_cudnn(config)
+    best_acc=0
 
     epoch_seeds = np.random.randint(np.iinfo(np.int32).max // 2,
                                     size=config.scheduler.epochs)
@@ -515,6 +516,8 @@ def main():
         checkpoint_config = checkpointer.resume_or_load('', resume=True)
         global_step = checkpoint_config['global_step']
         start_epoch = checkpoint_config['epoch']
+        if "best_acc" in checkpoint_config.keys():
+            best_acc=checkpoint_config['best_acc']
         config.defrost()
         config.merge_from_other_cfg(ConfigNode(checkpoint_config['config']))
         config.freeze()
@@ -537,7 +540,7 @@ def main():
 
     train_loss, val_loss = create_loss(config)
 
-    best_acc=0
+    
     if (config.train.val_period > 0 and start_epoch == 0
             and config.train.val_first):
         if not config.train.use_kfold and config.train.resume:
@@ -560,8 +563,7 @@ def main():
 
             if config.train.val_period > 0 and (epoch % config.train.val_period
                                                 == 0):
-                acc1=validate(epoch, config, model, val_loss, val_loader, logger,
-                        tensorboard_writer)
+                acc1=validate(epoch, config, model, val_loss, val_loader, logger,tensorboard_writer)
                 if config.train.use_kfold:
                     test(epoch, config, model, val_loss, test_loader, logger, tensorboard_writer)
 
@@ -577,12 +579,14 @@ def main():
                             'epoch': epoch,
                             'fold':fold,
                             'global_step': global_step,
+                            'best_acc' : best_acc,
                             'config': config.as_dict(),
                         }
                     else:
                         checkpoint_config = {
                             'epoch': epoch,
                             'global_step': global_step,
+                            'best_acc' : best_acc,
                             'config': config.as_dict(),
                         }
                     if get_rank() == 0:
