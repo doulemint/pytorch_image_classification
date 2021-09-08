@@ -100,7 +100,7 @@ def compute_loss_target(predictions, pseudo_labels,gt, alpha):
     if gt is not None:
         # print("gt: ",gt.size())
         # loss_func = cross_entropy_with_soft_target(reduction='mean')
-        # loss_func = tf.keras.losses.CategoricalCrossentropy()
+        # loss_func = tf.keras.losses.CategoricalCrossentropy(from_logits=True)
         loss_func1=nn.CrossEntropyLoss(reduction="mean")
         # loss_function = nn.CrossEntropyLoss()
         with torch.no_grad():
