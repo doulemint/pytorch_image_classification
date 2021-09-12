@@ -24,7 +24,7 @@ class StepcropAlbu(ImageOnlyTransform):
         return self.DataAugmentation3(img,self.n,self.pos)
 
     def DataAugmentation3(self,image,n=8,pos=0):
-        # n = 8
+        n = random.randrange(2,16)
         im_list = []
         iv_list = []
         patch_initial = np.array([0,0])

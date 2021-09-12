@@ -47,7 +47,7 @@ class TaylorCrossEntropyLoss(nn.Module):
         self.taylor_softmax = TaylorSoftmax(dim=1, n=n)
         self.reduction = reduction
         self.ignore_index = ignore_index
-        self.lab_smooth = LabelSmoothingLoss(config.dataset.num_classes, smoothing=smoothing)
+        self.lab_smooth = LabelSmoothingLoss(config.dataset.n_classes, smoothing=smoothing)
 
     def forward(self, logits, labels):
         log_probs = self.taylor_softmax(logits).log()
