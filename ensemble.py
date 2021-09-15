@@ -8,6 +8,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import tqdm
+from scipy.stats import mode
 
 from fvcore.common.checkpoint import Checkpointer
 from sklearn.ensemble import RandomForestClassifier
@@ -110,9 +111,54 @@ def randomForest():
         targets = targets.to(device)
         gt.extend(targets)
     clf = RandomForestClassifier(n_estimators=10)
-    scores = cross_val_score(clf, X, y, cv=5)
-    scores.mean()
+    # print(clf.score(X, gt))
+    scores = cross_val_score(clf, X, gt, cv=5)
+    print(scores.mean())
     # clf = clf.fit(X, gt)
+
+def voting():
+
+    npz_files = [
+    '/data/nextcloud/dbc2017/files/jupyter/me/pytorch_image_classification/outputs/imagenet/efficientnet-b5/exp02_SCAug/predictions.npz',
+    '/data/nextcloud/dbc2017/files/jupyter/me/pytorch_image_classification/outputs/imagenet/efficientnet-b5/exp02_MU_Aug/predictions.npz'
+               ]
+
+    labels = []
+    for f in npz_files:
+        predicts = np.argmax(np.load(f)['preds'], axis=1)
+        labels.append(predicts)
+        
+    # Ensemble with voting
+    labels = np.array(labels)
+    labels = np.transpose(labels, (1, 0))
+    labels = mode(labels,axis=1)[0]
+    
+    labels = np.squeeze(labels)
+    print(labels)
+
+    config = load_config()
+    _, test_loss = create_loss(config)
+    test_loader = create_dataloader(config, is_train=False)
+    gt=[]
+    device = torch.device(config.device)
+    correct_meter = AverageMeter()
+
+    for _, targets in tqdm.tqdm(test_loader):
+
+        targets = targets.to(device)
+        gt.extend(targets)
+
+    # loss = test_loss(labels, gt)
+    
+    labels=torch.tensor(np.array(labels))
+    print(labels,gt)
+    correct_ = labels.eq(gt).sum().item()
+    correct_meter.update(correct_, 1)
+
+    accuracy = correct_meter.sum / len(test_loader.dataset)
+    print("new acc: ",accuracy,"preds: ",labels)
 
 if __name__ == '__main__':
     randomForest()
+    # voting()
+    # main
