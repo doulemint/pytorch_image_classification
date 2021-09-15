@@ -26,7 +26,7 @@ class DistilledVisionTransformer(nn.Module):
 
     def forward(self, x):
         x, x_dist = self.model(x)
-        return x, x_dist
+        return (x+ x_dist)/2
 
 def set_parameter_requires_grad(model, feature_extracting):
     if feature_extracting:

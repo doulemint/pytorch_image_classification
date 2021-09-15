@@ -124,12 +124,13 @@ class LabelData(Dataset):
         return img, [label1,label2,label3]
 
 class MyDataset(Dataset):
-    def __init__(self, df, data_root, transforms=None, output_label=True,soft=False,n_class=50,label_smooth=False,epsilon=0.2,is_df=False):
+    def __init__(self, df, data_root, transforms=None, output_label=True,data_type=None,soft=False,n_class=50,label_smooth=False,epsilon=0.2,is_df=False):
         
         super().__init__()
         self.df = df.reset_index(drop=True).copy()
         self.transforms = transforms
         self.data_root = data_root
+        self.data_type = data_type
         self.is_df=is_df
         
         self.output_label = output_label
@@ -152,7 +153,10 @@ class MyDataset(Dataset):
           
         # img  = get_img("{}/{}".format(self.data_root, self.df.loc[index]['filename']))
         if self.is_df:
-            img  = get_img2("{}".format(self.df.loc[index]['file']))
+            if self.data_type=='wiki22':
+                img = get_img2("{}/{}".format(self.data_root, self.df.loc[index]['filename']))
+            else:
+                img  = get_img2("{}".format(self.df.loc[index]['file']))
         else:
             img  = get_img2("{}".format(self.df.loc[index]['filename']))
 
