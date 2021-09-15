@@ -9,7 +9,7 @@ except ImportError:
 import pandas as pd
 import numpy as np
 from evaluate import evaluate
-import tensorflow as tf
+# import tensorflow as tf
 
 from train import train,validate,load_config
 from pytorch_image_classification import (
@@ -94,7 +94,7 @@ def  generate_pseudo_labels(weak_images_train, weak_images_test, teacher_models,
 
 def cross_entropy_loss(data: torch.Tensor, target: torch.Tensor,
                        reduction: str) -> torch.Tensor:
-    target = F.log_softmax(target,dim=1)
+    target = torch.nn.Softmax(dim=1)(target)
     logp = F.log_softmax(data, dim=1)
     loss = torch.sum(-logp * target, dim=1)
     if reduction == 'none':
@@ -114,16 +114,16 @@ def compute_loss_target(predictions, pseudo_labels,gt, alpha):
 
     if gt is not None:
         # print("gt: ",gt.size())
-        loss_func1 = TaylorCrossEntropyLoss(reduction='mean')
+        # loss_func1 = TaylorCrossEntropyLoss(reduction='mean')
         # loss_func = cross_entropy_with_soft_target(reduction='mean')
         # loss_func = tf.keras.losses.CategoricalCrossentropy(from_logits=True)
-        # loss_func1=nn.CrossEntropyLoss(reduction="mean")
+        loss_func1=nn.CrossEntropyLoss(reduction="mean")
         # loss_function = nn.CrossEntropyLoss()
         with torch.no_grad():
-            # target_loss  = cross_entropy_loss(predictions,pseudo_labels,'mean')
+            target_loss  = cross_entropy_loss(predictions,pseudo_labels,'mean')
             # student_loss = cross_entropy_loss(predictions,gt,'mean')
             # _, fk_targets = pseudo_labels.max(dim=1)
-            target_loss = loss_func1(predictions,pseudo_labels)
+            #target_loss = loss_func1(predictions,pseudo_labels)
             # target_loss = torch.tensor(loss_func(predictions.cpu().numpy(),pseudo_labels.cpu().numpy()).numpy())#loss_func(predictions,pseudo_labels)
             student_loss = loss_func1(predictions,gt)
             # print("target_loss: ",target_loss," student_loss: ",student_loss)
@@ -131,11 +131,12 @@ def compute_loss_target(predictions, pseudo_labels,gt, alpha):
             return ((1 - alpha) * target_loss) + (alpha * student_loss)
     else:
         # _, fk_targets = pseudo_labels.max(dim=1)
-        loss_func = nn.CrossEntropyLoss(reduction='none')#cross_entropy_with_soft_target(reduction='none')
+        # loss_func = nn.CrossEntropyLoss(reduction='none')#cross_entropy_with_soft_target(reduction='none')
         # student_loss = loss_func(predictions,fk_targets)
-        student_loss = loss_func(predictions,pseudo_labels)
+        student_loss = cross_entropy_loss(predictions,pseudo_labels)
         # print("student_loss: ",student_loss)
         return student_loss
+
 def get_alpha(epoch, total_epochs):
     initial_alpha = 0.1
     final_alpha = 0.5
@@ -188,12 +189,12 @@ def main():
     batch_size=config.train.batch_size
 
     if config.dataset.type=='dir':
-        train_clean = get_files(data_root,'train',output_dir/'label_map.yaml')
+        train_clean = get_files(data_root,'train',output_dir/'label_map.pkl')
         sss = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=0)
         for trn_idx, val_idx in sss.split(train_clean['filename'], train_clean['label']):
             train_frame = train_clean.loc[trn_idx]
             val_frame  = train_clean.loc[val_idx]
-        test_clean=get_files(config.dataset.dataset_dir+'val/','train',output_dir/'label_map.yaml')
+        test_clean=get_files(config.dataset.dataset_dir+'val/','train',output_dir/'label_map.pkl')
     elif config.dataset.type=='df':
         train_clean =  pd.read_csv(config.dataset.cvsfile_train)
         sss = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=0)
@@ -254,7 +255,17 @@ def main():
     config.model.name=student_model_opt
     student_model=get_model(config,pretrained=False)
     ckp_pth= config.test.checkpoint+f'/checkpoint_{student_model_opt}.pth'
-    if os.path.exists(ckp_pth):
+    if config.train.checkpoint != '':
+        checkpoint = torch.load(config.train.checkpoint, map_location='cpu')
+        if isinstance(student_model,
+            (nn.DataParallel, nn.parallel.DistributedDataParallel)):
+            student_model.module.load_state_dict(checkpoint['model'])
+            print(f"load model from {str(config.train.checkpoint)}")
+        else:
+            student_model.load_state_dict(checkpoint['model'])
+            print(f"load model from {str(config.train.checkpoint)}")
+
+    elif os.path.exists(ckp_pth):
       checkpoint = torch.load(ckp_pth, map_location='cpu')
       if isinstance(student_model,
           (nn.DataParallel, nn.parallel.DistributedDataParallel)):
@@ -332,10 +343,12 @@ def main():
             num_train = strong_image_train.size(0)
             # print("num_train: ",num_train)
             # print("strong_image_test: ",strong_image_test.size())
-            # print("weak_image_test: ",weak_image_test.size())
+            # print("weak_image_test: ",weak_image_test.size()
 
-            student_prediction_train=student_model(strong_image_train)
-            student_prediction_test=student_model(strong_image_test)
+            # strong_image=torch.cat((strong_image_train, strong_image_test), dim=0)
+            student_prediction=student_model(torch.cat((strong_image_train, strong_image_test), dim=0))
+            student_prediction_train=student_prediction[:num_train]
+            student_prediction_test=student_prediction[num_train:]
             # print("student_prediction_test: ",student_prediction_test.size())
 
             

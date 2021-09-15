@@ -49,6 +49,55 @@ from fvcore.common.checkpoint import Checkpointer
 
 from sklearn.model_selection import StratifiedKFold,StratifiedShuffleSplit
 
+def train_model(epoch,model, train_loader, val_loader, criterion, optimizer, device, max_epoch, summary_writer=None):
+        # model.to(device)
+    # for  in range(1, max_epoch + 1):  # loop over the dataset multiple times
+
+        running_loss = 0.0
+        running_accuracy = 0.0
+        count = 0
+        for step, (image,label) in enumerate(train_loader, 1):
+            # get the inputs; data is a list of [inputs, labels]
+
+            # zero the parameter gradients
+            optimizer.zero_grad()
+
+            # forward + backward + optimize
+            outputs = model(image)
+            loss = criterion(outputs, label)
+            running_loss += loss.item()
+            loss.backward()
+            optimizer.step()
+
+            logits = torch.max(outputs, dim=1)[1]
+            if label.dim() != 1:
+                label = torch.max(label, dim=1)[1]
+            count += outputs.size(0)
+            running_accuracy += (logits == label).sum().item()
+
+        # print statistics
+        print('TRAIN - Epoch {} loss: {:.4f} accuracy: {:.4f}'.format(epoch,
+                                                                      running_loss / step, running_accuracy / count))
+        if summary_writer is not None:
+            summary_writer.add_scalar('train', running_accuracy / count, epoch)
+
+        running_accuracy = 0.0
+        count = 0
+        model.eval()
+        for step, (image,label) in enumerate(val_loader, 1):
+            
+            with torch.no_grad():
+                outputs = model(image)
+
+                logits = torch.max(outputs, dim=1)[1]
+                count += outputs.size(0)
+                running_accuracy += (logits == label).sum().item()
+
+        print('VAL - Epoch {}  accuracy: {:.4f}'.format(epoch,
+                                                        running_accuracy / count))
+
+        if summary_writer is not None:
+            summary_writer.add_scalar('val', running_accuracy / count, epoch)
 
 def main():
     config = load_config()
@@ -90,12 +139,12 @@ def main():
     batch_size=config.train.batch_size
 
     if config.dataset.type=='dir':
-        train_clean = get_files(data_root,'train',output_dir/'label_map.yaml')
+        train_clean = get_files(data_root,'train',output_dir/'label_map.pkl')
         sss = StratifiedShuffleSplit(n_splits=1, test_size=0.7, random_state=0)
         for trn_idx, val_idx in sss.split(train_clean['filename'], train_clean['label']):
             train_frame = train_clean.loc[trn_idx]
             test_frame  = train_clean.loc[val_idx]
-        test_clean=get_files(config.dataset.dataset_dir+'val/','train',output_dir/'label_map.yaml')
+        test_clean=get_files(config.dataset.dataset_dir+'val/','train',output_dir/'label_map.pkl')
     elif config.dataset.type=='df':
         train_clean =  pd.read_csv(config.dataset.cvsfile_train)
         sss = StratifiedShuffleSplit(n_splits=1, test_size=0.7, random_state=0)
@@ -106,15 +155,16 @@ def main():
 
 
     baseline=0
+    device=config.device
 
-    models_opt=["resnet50","efficientnet-b4","efficientnet-b5"]#
+    models_opt=["resnet50","resnet101","efficientnet-b5"]#
     models = []
     config.defrost()
     for opt in models_opt:
         config.model.name=opt
-        models.append(get_model(config))
+        models.append(get_model(config,pretrained=False))
     config.freeze()
-    device=config.device
+    
     if device=='cpu':
         num_workers=1
     else:
@@ -230,7 +280,7 @@ def main():
             train_loss, val_loss = create_loss(config)
             # model.to(device)
             models[i]=model
-            if i!=0:
+            if i != 0:
                 pseudo_labeled_dataloader = DataLoader(pesudoMyDataset(train_frame, test_frame,data_root, models[i - 1], device, transforms=create_transform(config, is_train=True), 
                         soft=soft,n_class=config.dataset.n_classes,label_smooth=config.augmentation.use_label_smoothing,
                         epsilon=config.augmentation.label_smoothing.epsilon,is_df=config.dataset.type=='df'), 
