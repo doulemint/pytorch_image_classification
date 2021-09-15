@@ -109,16 +109,17 @@ def load_config():
     config = update_config(config)
     config.freeze()
     return config
+
 def evaluate(NN, test_dataloader,models,test_loss,epoch,logger,tensorboard_writer,config,device):        
-        NN.val()
+        NN.eval()
         pred_raw_all = []
 
-        start = time.time()
+        import time; start = time.time()
         loss_meter = AverageMeter()
         acc1_meter = AverageMeter()
         acc5_meter = AverageMeter()
 
-        for data,target in test_dataloader:
+        for data,targets in test_dataloader:
             for model in models: 
                 with torch.no_grad():
                     data = data.to(device)
@@ -130,7 +131,7 @@ def evaluate(NN, test_dataloader,models,test_loss,epoch,logger,tensorboard_write
             with torch.no_grad():
             
                 probs = NN(pred_raw_all)
-                loss = test_loss(probs, target)
+                loss = test_loss(probs, targets)
 
             acc1, acc5 = compute_accuracy(config,
                                           probs,
@@ -164,6 +165,8 @@ def evaluate(NN, test_dataloader,models,test_loss,epoch,logger,tensorboard_write
             tensorboard_writer.add_scalar('Val/Acc1', acc1_meter.avg, epoch)
             tensorboard_writer.add_scalar('Val/Acc5', acc5_meter.avg, epoch)
             tensorboard_writer.add_scalar('Val/Time', elapsed, epoch)
+        return acc1_meter.val
+        
 
 def main():
     config = load_config()
@@ -266,7 +269,12 @@ def main():
     optimizer = create_optimizer(config, NN)
     scheduler =create_scheduler(config,
                                  optimizer,
-                                 steps_per_epoch=len(train_clean))
+                                 steps_per_epoch=len(labeled_dataloader))
+    checkpointer = Checkpointer(NN,
+                                optimizer=optimizer,
+                                scheduler=scheduler,
+                                save_dir=output_dir,
+                                save_to_disk=get_rank() == 0)
     if get_rank() == 0 and config.train.use_tensorboard:
         tensorboard_writer = create_tensorboard_writer(
                     config, output_dir, purge_step=config.train.start_epoch + 1)
@@ -336,8 +344,21 @@ def main():
             tensorboard_writer.add_scalar('Train/Acc5', acc5_meter.avg, epoch)
             tensorboard_writer.add_scalar('Train/Time', elapsed, epoch)
             tensorboard_writer.add_scalar('Train/LearningRate',scheduler.get_last_lr()[0], epoch)
+            tensorboard_writer.flush()
         scheduler.step()
-        evaluate(NN,test_dataloader,models,test_loss,epoch,logger,tensorboard_writer,config,device)
+        acc=evaluate(NN,test_dataloader,models,test_loss,epoch,logger,tensorboard_writer,config,device)
+        if best_acc<acc and get_rank()==0:
+                checkpoint_config = {
+                            'epoch': epoch,
+                            'best_acc' : best_acc,
+                            'config': config.as_dict(),
+                        }
+                if get_rank() == 0:
+                        logger.info(f"improve {acc} from {best_acc} save checkpoint!")
+                        best_acc = acc
+                        checkpointer.save(f'checkpoint_bstacc', **checkpoint_config)
+        tensorboard_writer.flush()
+    tensorboard_writer.close()
 
 if __name__ == '__main__':
     main()
