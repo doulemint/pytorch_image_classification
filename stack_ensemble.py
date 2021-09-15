@@ -81,6 +81,12 @@ class ShallowNetwork(nn.Module):
         x = F.dropout(F.relu(self.fc1(x), inplace=True),training=self.training)
         x = self.fc2(x)
         return x
+def set_parameter_requires_grad(model, feature_extracting):
+    if feature_extracting:
+        model = model
+        for param in model.parameters():
+            # print(param)
+            param.requires_grad = False
 def load_config():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str)
@@ -112,7 +118,7 @@ def load_config():
 
 def evaluate(NN, test_dataloader,models,test_loss,epoch,logger,tensorboard_writer,config,device):        
         NN.eval()
-        pred_raw_all = []
+        
 
         import time; start = time.time()
         loss_meter = AverageMeter()
@@ -120,6 +126,7 @@ def evaluate(NN, test_dataloader,models,test_loss,epoch,logger,tensorboard_write
         acc5_meter = AverageMeter()
 
         for data,targets in test_dataloader:
+            pred_raw_all = []
             for model in models: 
                 with torch.no_grad():
                     data = data.to(device)
@@ -242,10 +249,13 @@ def main():
     baseline=0
     
 
-    models_opt=["efficientnet-b5","efficientnet-b5","efficientnet-b5"]#
+    models_opt=["efficientnet-b5",
+    # "efficientnet-b5","efficientnet-b5"
+    ]#
     models_checkpoints=['/root/artwork/pytorch_image_classification/experiments/wiki22/efficientnet-b5/exp01_CM_AUg/checkpoint_bstacc.pth',
-            '/root/artwork/pytorch_image_classification/experiments/wiki22/efficientnet-b5/exp01_RC_AUg/checkpoint_bstacc.pth',
-            '/root/artwork/pytorch_image_classification/experiments/wiki22/efficientnet-b5/exp01_SC_Aug/checkpoint_bstacc.pth']
+            # '/root/artwork/pytorch_image_classification/experiments/wiki22/efficientnet-b5/exp01_RC_AUg/checkpoint_bstacc.pth',
+            # '/root/artwork/pytorch_image_classification/experiments/wiki22/efficientnet-b5/exp01_SC_Aug/checkpoint_bstacc.pth'
+            ]
     models = []
     config.defrost()
     for opt,ckp_pth in zip(models_opt,models_checkpoints):
@@ -260,6 +270,7 @@ def main():
                 else:
                     models[-1].load_state_dict(checkpoint['model'])
                     print(f"load model from {str(ckp_pth)}")
+        set_parameter_requires_grad(models[-1],False)
         models[-1].to(device)
     config.freeze()
     
