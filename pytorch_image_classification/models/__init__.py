@@ -10,6 +10,23 @@ import tensorflow as tf
 from torchvision import models
 from pretrainedmodels import models as pm
 import pretrainedmodels
+from timm.models.vision_transformer import VisionTransformer, _cfg
+from timm.models.registry import register_model
+from timm.models.layers import trunc_normal_
+from functools import partial
+
+class DistilledVisionTransformer(nn.Module):
+    def __init__(self,model, target_size, pretrained=False):
+        super(MyDeiT, self).__init__()
+        self.model = model
+        n_features = self.model.head.in_features
+        # 改成自己任务的图像类别数
+        self.model.head = nn.Linear(n_features, target_size)
+        self.model.head_dist = nn.Linear(n_features, target_size)
+
+    def forward(self, x):
+        x, x_dist = self.model(x)
+        return x, x_dist
 
 def set_parameter_requires_grad(model, feature_extracting):
     if feature_extracting:
@@ -117,7 +134,7 @@ def get_model(configs,feature_extract=False,dropout=0.4,pretrained=True):
         set_parameter_requires_grad(model, feature_extract)
         model.classifier = nn.Linear(model.classifier.in_features, configs.dataset.n_classes)
     elif configs.model.name.startswith("efficientnet-b5"):
-        model = timm.create_model('tf_efficientnet_b5_ns',drop_rate=dropout, pretrained=pretrained, num_classes=configs.dataset.n_classes, drop_path_rate=0.2)
+        model = timm.create_model('tf_efficientnet_b5_ns',drop_rate=dropout, pretrained=pretrained, drop_path_rate=0.2)
         set_parameter_requires_grad(model, feature_extract)
         model.classifier = nn.Linear(model.classifier.in_features, configs.dataset.n_classes)
         # model.classifier=nn.Sequential(
@@ -163,8 +180,10 @@ def get_model(configs,feature_extract=False,dropout=0.4,pretrained=True):
     elif configs.model.name.startswith('deit_base_distilled_patch16_224'):
         assert timm.__version__ == "0.3.2"
         # now load it with torchhub
-        model = torch.hub.load('facebookresearch/deit:main', 'deit_base_distilled_patch16_224', pretrained=True)
-        model.head = nn.Linear(model.head.in_features, configs.dataset.n_classes)
+        model = torch.hub.load('facebookresearch/deit:main', 'deit_base_patch16_224', pretrained=True)
+        model = DistilledVisionTransformer(model,configs.dataset.n_classes)
+        set_parameter_requires_grad(model, feature_extract)
+        return model
 
     elif configs.model.name == 'shufflenetv2_x0_5':  # clw modify
         model = models.shufflenet_v2_x0_5(pretrained=True)  # clw modify

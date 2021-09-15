@@ -343,6 +343,11 @@ def create_dataset(config: yacs.config.CfgNode,
                 valid_ds = Data(df,label_map,config,val_transform)
                 
                 return valid_ds
+            if config.dataset.type=='dir'and config.augmentation.use_albumentations:
+                test_clean=get_files(config.dataset.dataset_dir+'val/','train',config.train.output_dir+'/label_map.yaml')
+                test_dataset = MyDataset(test_clean,config.dataset.dataset_dir+'val/',
+                        transforms=create_transform(config, is_train=False),is_df=config.dataset.type=='df')
+                return test_dataset
               
             dataset_dir = pathlib.Path(config.dataset.dataset_dir).expanduser()
             val_transform = create_transform(config, is_train=False)
