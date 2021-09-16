@@ -8,15 +8,20 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import tqdm
+
+from stack_ensemble import ShallowNetwork
 from scipy.stats import mode
 
 from fvcore.common.checkpoint import Checkpointer
+from torch.utils.data import DataLoader
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import cross_val_score
+from sklearn.metrics import accuracy_score
 
 from pytorch_image_classification import (
     apply_data_parallel_wrapper,
-    create_dataloader,
+    create_dataloader,create_dataset,
     create_loss,
     create_model,
     get_default_config,
@@ -94,8 +99,8 @@ def main():
 def randomForest():
     X=[]
     npz_files = [
-    '/data/nextcloud/dbc2017/files/jupyter/me/pytorch_image_classification/outputs/imagenet/efficientnet-b5/exp02_SCAug/predictions.npz',
-    '/data/nextcloud/dbc2017/files/jupyter/me/pytorch_image_classification/outputs/imagenet/efficientnet-b5/exp02_MU_Aug/predictions.npz'
+    '/content/pytorch_image_classification/outputs/wiki22/efficientnet-b5/exp010_sc/predictions_test.npz',
+    '/content/pytorch_image_classification/outputs/wiki22/efficientnet-b5/exp09_MU/predictions_test.npz'
                ]
     for f in npz_files:
         print(f)
@@ -108,25 +113,85 @@ def randomForest():
 
     for _, targets in tqdm.tqdm(test_loader):
 
-        targets = targets.to(device)
-        gt.extend(targets)
+        # targets = targets.to(device)
+        gt.extend(targets.numpy())
     clf = RandomForestClassifier(n_estimators=10)
     # print(clf.score(X, gt))
     scores = cross_val_score(clf, X, gt, cv=5)
     print(scores.mean())
     # clf = clf.fit(X, gt)
 
+def logitregression():
+    X=[]
+    npz_files = [
+    '/content/pytorch_image_classification/outputs/wiki22/efficientnet-b5/exp010_sc/predictions_train.npz',
+    '/content/pytorch_image_classification/outputs/wiki22/efficientnet-b5/exp09_MU/predictions_train.npz'
+               ]
+    npz_test_files = [
+    '/content/pytorch_image_classification/outputs/wiki22/efficientnet-b5/exp010_sc/predictions_test.npz',
+    '/content/pytorch_image_classification/outputs/wiki22/efficientnet-b5/exp09_MU/predictions_test.npz'
+               ]
+    for f in npz_files:
+        # print(f)
+        X.append(np.load(f)['preds'])
+    X=np.concatenate(X,axis=1)
+    print(X.shape)
+
+    X_test=[]
+    for f in npz_test_files:
+        # print(np.load(f)['preds'].shape)
+        X_test.append(np.load(f)['preds'])
+        
+    X_test=np.concatenate(X_test,axis=1)
+    print(X_test.shape)
+
+    config = load_config()
+    data_root = config.dataset.dataset_dir
+    batch_size=config.train.batch_size
+    num_workers = 2
+    # labeled_dataset = MyDataset(train_clean, data_root, transforms=create_transform(config, is_train=False),data_type=config.dataset.subname)
+    train_dataset, val_dataset = create_dataset(config, True)
+    labeled_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+
+    # test_dataset = MyDataset(test_clean, data_root, transforms=create_transform(config, is_train=False),data_type=config.dataset.subname)
+    test_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+    gt=[]
+    device = torch.device(config.device)
+
+    gt_test=[]
+    for _, targets in tqdm.tqdm(test_dataloader):
+        # targets = targets.to(device)
+        gt_test.extend(targets.numpy())
+    gt_test = np.array(gt_test)
+    print(gt_test.shape)
+
+    for _, targets in tqdm.tqdm(labeled_dataloader):
+      if targets=='unknown':
+        targets=0
+      # targets = targets.to(device)
+      gt.extend(targets.numpy())
+    # print(len(gt),len(gt[0]))
+    gt = np.array(gt)
+    print(gt.shape)
+    
+    model = ShallowNetwork()#LogisticRegression()
+    model.fit(X, gt)
+    yhat = model.predict(X_test)
+    acc = accuracy_score(gt_test, yhat)
+    print("acc: ",acc)
+    # clf = clf.fit(X, gt)
+
 def voting():
 
     npz_files = [
-    '/data/nextcloud/dbc2017/files/jupyter/me/pytorch_image_classification/outputs/imagenet/efficientnet-b5/exp02_SCAug/predictions.npz',
-    '/data/nextcloud/dbc2017/files/jupyter/me/pytorch_image_classification/outputs/imagenet/efficientnet-b5/exp02_MU_Aug/predictions.npz'
+    '/content/pytorch_image_classification/outputs/wiki22/efficientnet-b5/exp010_sc/predictions_test.npz',
+    '/content/pytorch_image_classification/outputs/wiki22/efficientnet-b5/exp09_MU/predictions_test.npz'
                ]
 
     labels = []
     for f in npz_files:
         predicts = np.argmax(np.load(f)['preds'], axis=1)
-        labels.append(predicts)
+        labels.append([predicts])
         
     # Ensemble with voting
     labels = np.array(labels)
@@ -146,7 +211,7 @@ def voting():
     for _, targets in tqdm.tqdm(test_loader):
 
         targets = targets.to(device)
-        gt.extend(targets)
+        gt.append([targets])
 
     # loss = test_loss(labels, gt)
     
@@ -159,6 +224,7 @@ def voting():
     print("new acc: ",accuracy,"preds: ",labels)
 
 if __name__ == '__main__':
+    # logitregression()
     randomForest()
     # voting()
     # main

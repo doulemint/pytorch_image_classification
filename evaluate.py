@@ -8,6 +8,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import tqdm
+import pandas as pd
 
 from fvcore.common.checkpoint import Checkpointer
 from torch.utils.data import DataLoader
@@ -112,13 +113,36 @@ def main():
                         transforms=create_transform(config, is_train=False),is_df=config.dataset.type=='df')
                 test_loader = DataLoader(test_dataset, batch_size=config.train.batch_size, num_workers=config.train.dataloader.num_workers)
             else: 
-                test_loader = create_dataloader(config, is_train=False)
+                train_clean =  pd.read_csv(config.dataset.cvsfile_train)
+                test_clean =  pd.read_csv(config.dataset.cvsfile_test)
+                
+                data_root = config.dataset.dataset_dir
+                batch_size=config.train.batch_size
+                num_workers = 2
+                labeled_dataset = MyDataset(train_clean, data_root, transforms=create_transform(config, is_train=False),data_type=config.dataset.subname)
+                labeled_dataloader = DataLoader(labeled_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+
+                test_dataset = MyDataset(test_clean, data_root, transforms=create_transform(config, is_train=False),data_type=config.dataset.subname)
+                test_loader = DataLoader(labeled_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+    else:
+      labeled_dataloader,test_loader = create_dataloader(config, is_train=True)
     _, test_loss = create_loss(config)
 
     preds, probs, labels, loss, acc = evaluate(config, model, test_loader,
                                                test_loss, logger)
 
-    output_path = output_dir / f'predictions.npz'
+    output_path = output_dir / f'predictions_test.npz'
+    np.savez(output_path,
+             preds=preds,
+             probs=probs,
+             labels=labels,
+             loss=loss,
+             acc=acc)
+
+    preds, probs, labels, loss, acc = evaluate(config, model, labeled_dataloader,
+                                               test_loss, logger)
+
+    output_path = output_dir / f'predictions_train.npz'
     np.savez(output_path,
              preds=preds,
              probs=probs,

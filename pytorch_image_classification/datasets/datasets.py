@@ -152,12 +152,12 @@ class MyDataset(Dataset):
             target = self.labels[index]
           
         # img  = get_img("{}/{}".format(self.data_root, self.df.loc[index]['filename']))
-        if self.is_df:
-            if self.data_type=='wiki22':
-                img = get_img2("{}/{}".format(self.data_root, self.df.loc[index]['filename']))
-            else:
-                img  = get_img2("{}".format(self.df.loc[index]['file']))
+        if self.is_df:       
+            img  = get_img2("{}".format(self.df.loc[index]['file']))
         else:
+          if self.data_type=='wiki22':
+                img = get_img2("{}/{}".format(self.data_root, self.df.loc[index]['image']))
+          else:
             img  = get_img2("{}".format(self.df.loc[index]['filename']))
 
         if self.transforms:
