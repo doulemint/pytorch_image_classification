@@ -160,15 +160,11 @@ def evaluate(NN, test_dataloader,test_loss,epoch,logger,tensorboard_writer,confi
             acc1_meter.update(acc1, num)
             acc5_meter.update(acc5, num)
 
-        logger.info(f'Epoch {epoch} '
-                    f'loss {loss_meter.avg:.4f} '
-                    f'acc@1 {acc1_meter.avg:.4f} '
-                    f'acc@5 {acc5_meter.avg:.4f}')
         if get_rank() == 0:
             elapsed = time.time() - start
             logger.info(f'Elapsed {elapsed:.2f}')
             logger.info(
-                    f'Epoch {epoch} '
+                    f'val/Epoch {epoch} '
                     f'loss {loss_meter.val:.4f} ({loss_meter.avg:.4f}) '
                     # f'sk_acc@1 {sk_acc1_meter.val:.4f} ({sk_acc1_meter.avg:.4f}) '
                     f'acc@1 {acc1_meter.val:.4f} ({acc1_meter.avg:.4f}) '
@@ -335,7 +331,7 @@ def main():
     print(gt_test.size()) 
     my_dataset = TensorDataset(tensor_x_test,gt_test) # create your datset
     test_dataloader = DataLoader(my_dataset,batch_size=batch_size, num_workers=num_workers) 
-    acc=evaluate(NN,test_dataloader,test_loss,0,logger,tensorboard_writer,config,device)
+    # acc=evaluate(NN,test_dataloader,test_loss,0,logger,tensorboard_writer,config,device)
 
     
     X=[]
@@ -351,6 +347,7 @@ def main():
     # print(len(gt),len(gt[0]))
     gt = torch.Tensor(gt).view(-1,1)
     print(X.shape);print(gt.size())
+    best_acc=0
     my_dataset = TensorDataset(tensor_x,gt) # create your datset
     labeled_dataloader = DataLoader(my_dataset,batch_size=batch_size, num_workers=num_workers) 
 
@@ -397,15 +394,11 @@ def main():
             acc1_meter.update(acc1, num)
             acc5_meter.update(acc5, num)
 
-        logger.info(f'Epoch {epoch} '
-                    f'loss {loss_meter.avg:.4f} '
-                    f'acc@1 {acc1_meter.avg:.4f} '
-                    f'acc@5 {acc5_meter.avg:.4f}')
         if get_rank() == 0:
             elapsed = time.time() - start
             logger.info(f'Elapsed {elapsed:.2f}')
             logger.info(
-                    f'Epoch {epoch} '
+                    f'train/Epoch {epoch} '
                     f'lr {scheduler.get_last_lr()[0]:.6f} '
                     f'loss {loss_meter.val:.4f} ({loss_meter.avg:.4f}) '
                     # f'sk_acc@1 {sk_acc1_meter.val:.4f} ({sk_acc1_meter.avg:.4f}) '
