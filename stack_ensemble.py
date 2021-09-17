@@ -136,9 +136,9 @@ def evaluate(NN, test_dataloader,test_loss,epoch,logger,tensorboard_writer,confi
             #         pred_raw_all.append(outputs)
 
             # pred_raw_all = torch.cat(pred_raw_all,1)
-            data = data.to(device);print(data.size());print(targets.size())
+            data = data.to(device)#;print(data.size());print(targets.size())
             
-            targets = targets.to(device)
+            targets = torch.flatten(targets).to(device)
             test_loss = nn.CrossEntropyLoss(reduction='mean')
 
             with torch.no_grad():       
@@ -370,7 +370,7 @@ def main():
             #         outputs = model(data)
             #         pred_raw_all.append(outputs)
             data = data.to(device)
-            targets = targets.to(device)
+            targets = torch.flatten(targets).to(device)
             optimizer.zero_grad()
             # pred_raw_all = torch.cat(pred_raw_all,1)#;print(pred_raw_all,'\n',targets);
             NN.train()
