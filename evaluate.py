@@ -16,7 +16,7 @@ from sklearn.model_selection import StratifiedKFold,StratifiedShuffleSplit
 
 from pytorch_image_classification import (
     apply_data_parallel_wrapper,
-    create_dataloader,
+    create_dataloader,create_dataset,
     create_loss,create_transform,
     create_model,get_files,
     get_default_config,
@@ -56,9 +56,11 @@ def evaluate(config, model, test_loader, loss_func, logger):
     pred_raw_all = []
     pred_prob_all = []
     pred_label_all = []
+    gt_label_all = []
     with torch.no_grad():
         for data, targets in tqdm.tqdm(test_loader):
             data = data.to(device)
+            gt_label_all.extend(targets)
             targets = targets.to(device)
 
             outputs = model(data)
@@ -86,7 +88,7 @@ def evaluate(config, model, test_loader, loss_func, logger):
     preds = np.concatenate(pred_raw_all)
     probs = np.concatenate(pred_prob_all)
     labels = np.concatenate(pred_label_all)
-    return preds, probs, labels, loss_meter.avg, accuracy
+    return preds, probs, labels, loss_meter.avg, accuracy,gt_label_all
 
 
 def main():
@@ -113,22 +115,19 @@ def main():
                         transforms=create_transform(config, is_train=False),is_df=config.dataset.type=='df')
                 test_loader = DataLoader(test_dataset, batch_size=config.train.batch_size, num_workers=config.train.dataloader.num_workers)
             else: 
-                train_clean =  pd.read_csv(config.dataset.cvsfile_train)
-                test_clean =  pd.read_csv(config.dataset.cvsfile_test)
-                
                 data_root = config.dataset.dataset_dir
                 batch_size=config.train.batch_size
                 num_workers = 2
-                labeled_dataset = MyDataset(train_clean, data_root, transforms=create_transform(config, is_train=False),data_type=config.dataset.subname)
-                labeled_dataloader = DataLoader(labeled_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+                train_dataset, val_dataset = create_dataset(config, True)
+                labeled_dataloader = DataLoader(train_dataset, batch_size=batch_size, num_workers=num_workers)
 
-                test_dataset = MyDataset(test_clean, data_root, transforms=create_transform(config, is_train=False),data_type=config.dataset.subname)
-                test_loader = DataLoader(labeled_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+                # test_dataset = MyDataset(test_clean, data_root, transforms=create_transform(config, is_train=False),data_type=config.dataset.subname)
+                test_loader = DataLoader(val_dataset, batch_size=batch_size, num_workers=num_workers)
     else:
       labeled_dataloader,test_loader = create_dataloader(config, is_train=True)
     _, test_loss = create_loss(config)
 
-    preds, probs, labels, loss, acc = evaluate(config, model, test_loader,
+    preds, probs, labels, loss, acc,gt = evaluate(config, model, test_loader,
                                                test_loss, logger)
 
     output_path = output_dir / f'predictions_test.npz'
@@ -137,9 +136,10 @@ def main():
              probs=probs,
              labels=labels,
              loss=loss,
-             acc=acc)
+             acc=acc,
+             gt=gt)
 
-    preds, probs, labels, loss, acc = evaluate(config, model, labeled_dataloader,
+    preds, probs, labels, loss, acc,gt = evaluate(config, model, labeled_dataloader,
                                                test_loss, logger)
 
     output_path = output_dir / f'predictions_train.npz'
@@ -148,7 +148,8 @@ def main():
              probs=probs,
              labels=labels,
              loss=loss,
-             acc=acc)
+             acc=acc,
+             gt=gt)
 
 
 if __name__ == '__main__':
