@@ -75,11 +75,11 @@ from pytorch_image_classification.models import get_model
 class ShallowNetwork(nn.Module):
     def __init__(self,n_classes):
         super(ShallowNetwork,self).__init__()
-        self.feature_size=n_classes*2
-        self.fc1 = nn.Linear(self.feature_size, n_classes)
-        self.fc2 = nn.Linear(n_classes, n_classes)
+        self.feature_size=n_classes*3
+        self.fc1 = nn.Linear(self.feature_size, n_classes*2)
+        self.fc2 = nn.Linear(n_classes*2, n_classes)
     def forward(self, x):
-        x = F.relu(self.fc1(x), inplace=True)#F.dropout(,training=self.training)
+        x = F.dropout(F.relu(self.fc1(x), inplace=True),training=self.training)
         x = self.fc2(x)
         return x
 def set_parameter_requires_grad(model, feature_extracting):
@@ -223,34 +223,34 @@ def main():
         num_workers=2
     soft=False
 
-    if config.augmentation.use_albumentations:
-        if config.dataset.type=='dir':
-            train_clean = get_files(data_root,'train',output_dir/'label_map.pkl')
-            # sss = StratifiedShuffleSplit(n_splits=1, test_size=0.7, random_state=0)
-            # for trn_idx, val_idx in sss.split(train_clean['filename'], train_clean['label']):
-            #     train_frame = train_clean.loc[trn_idx]
-            #     test_frame  = train_clean.loc[val_idx]
-            test_clean=get_files(config.dataset.dataset_dir+'val/','train',output_dir/'label_map.pkl')
-            labeled_dataset = MyDataset(train_clean, data_root, transforms=create_transform(config, is_train=False), output_label=True,soft=soft,
-                        n_class=config.dataset.n_classes,label_smooth=config.augmentation.use_label_smoothing,
-                        epsilon=config.augmentation.label_smoothing.epsilon,is_df=config.dataset.type=='df')
-            labeled_dataloader = DataLoader(labeled_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
-            test_dataset = MyDataset(test_clean,config.dataset.dataset_dir+'/val',
-                            transforms=create_transform(config, is_train=False),is_df=config.dataset.type=='df')
-            test_dataloader = DataLoader(test_dataset, batch_size=batch_size, num_workers=num_workers)
+    # if config.augmentation.use_albumentations:
+    #     if config.dataset.type=='dir':
+    #         train_clean = get_files(data_root,'train',output_dir/'label_map.pkl')
+    #         # sss = StratifiedShuffleSplit(n_splits=1, test_size=0.7, random_state=0)
+    #         # for trn_idx, val_idx in sss.split(train_clean['filename'], train_clean['label']):
+    #         #     train_frame = train_clean.loc[trn_idx]
+    #         #     test_frame  = train_clean.loc[val_idx]
+    #         test_clean=get_files(config.dataset.dataset_dir+'val/','train',output_dir/'label_map.pkl')
+    #         labeled_dataset = MyDataset(train_clean, data_root, transforms=create_transform(config, is_train=False), output_label=True,soft=soft,
+    #                     n_class=config.dataset.n_classes,label_smooth=config.augmentation.use_label_smoothing,
+    #                     epsilon=config.augmentation.label_smoothing.epsilon,is_df=config.dataset.type=='df')
+    #         labeled_dataloader = DataLoader(labeled_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+    #         test_dataset = MyDataset(test_clean,config.dataset.dataset_dir+'/val',
+    #                         transforms=create_transform(config, is_train=False),is_df=config.dataset.type=='df')
+    #         test_dataloader = DataLoader(test_dataset, batch_size=batch_size, num_workers=num_workers)
 
-        elif config.dataset.type=='df':
-            train_dataset, val_dataset = create_dataset(config, True)
-            # train_clean =  pd.read_csv(config.dataset.cvsfile_train)
-            # test_clean =  pd.read_csv(config.dataset.cvsfile_test)
-            labeled_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+    #     elif config.dataset.type=='df':
+    #         train_dataset, val_dataset = create_dataset(config, True)
+    #         # train_clean =  pd.read_csv(config.dataset.cvsfile_train)
+    #         # test_clean =  pd.read_csv(config.dataset.cvsfile_test)
+    #         labeled_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
 
-            # test_dataset = MyDataset(test_clean, data_root, transforms=create_transform(config, is_train=False),data_type=config.dataset.subname)
-            test_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+    #         # test_dataset = MyDataset(test_clean, data_root, transforms=create_transform(config, is_train=False),data_type=config.dataset.subname)
+    #         test_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
 
-    else:
-        if config.train.use_test_as_val:
-            labeled_dataloader,test_dataloader = create_dataloader(config, is_train=True)
+    # else:
+    #     if config.train.use_test_as_val:
+    #         labeled_dataloader,test_dataloader = create_dataloader(config, is_train=True)
 
 
     baseline=0
@@ -280,14 +280,25 @@ def main():
     #     set_parameter_requires_grad(models[-1],False)
     #     models[-1].to(device)
     # config.freeze()
-    
-    
+    npz_files = [
+    '/content/pytorch_image_classification/outputs/wiki22/efficientnet-b5/exp010_sc/predictions_train.npz',
+    '/content/pytorch_image_classification/outputs/wiki22/efficientnet-b5/exp09_MU/predictions_train.npz',
+    '/content/pytorch_image_classification/outputs/wiki22/efficientnet-b5/exp09_rc/predictions_train.npz',
+    # '/content/pytorch_image_classification/outputs/wiki22/efficientnet-b5/exp02_cm/predictions_train.npz'
+               ]
+    X=[]
+    for f in npz_files:
+        # print(f)
+        X.append(np.load(f)['probs'])
+    gt=np.load(f)['gt']
+    X=np.concatenate(X,axis=1)
+    # print(X[0],X.shape);
 
     NN = ShallowNetwork(config.dataset.n_classes);NN.to(device)
     optimizer = create_optimizer(config, NN)
     scheduler =create_scheduler(config,
                                  optimizer,
-                                 steps_per_epoch=len(labeled_dataloader))
+                                 steps_per_epoch=len(gt))
     checkpointer = Checkpointer(NN,
                                 optimizer=optimizer,
                                 scheduler=scheduler,
@@ -299,60 +310,54 @@ def main():
     else:
         tensorboard_writer = DummyWriter()
         
-    npz_files = [
-    '/content/pytorch_image_classification/outputs/wiki22/efficientnet-b5/exp010_sc/predictions_train.npz',
-    '/content/pytorch_image_classification/outputs/wiki22/efficientnet-b5/exp09_MU/predictions_train.npz'
-               ]
+    
     npz_test_files = [
     '/content/pytorch_image_classification/outputs/wiki22/efficientnet-b5/exp010_sc/predictions_test.npz',
-    '/content/pytorch_image_classification/outputs/wiki22/efficientnet-b5/exp09_MU/predictions_test.npz'
+    '/content/pytorch_image_classification/outputs/wiki22/efficientnet-b5/exp09_MU/predictions_test.npz',
+    '/content/pytorch_image_classification/outputs/wiki22/efficientnet-b5/exp09_rc/predictions_test.npz',
+    # '/content/pytorch_image_classification/outputs/wiki22/efficientnet-b5/exp02_cm/predictions_test.npz'
                ]
 
     train_loss, test_loss = create_loss(config)
     X_test=[]
     for f in npz_test_files:
         # print(np.load(f)['preds'].shape)
-        X_test.append(np.load(f)['preds'])
-        
+        X_test.append(np.load(f)['probs'])
+    gt_test=np.load(f)['gt']    
     X_test=np.concatenate(X_test,axis=1)
 
      # transform to torch tensor
     tensor_x_test = torch.Tensor(X_test)
     # tensor_y = torch.Tensor(my_y)
     
-    gt_test=[]
-    for _, targets in tqdm.tqdm(test_dataloader):
-      # print(targets)
-      gt_test.extend(targets)
+    # gt_test=[]
+    # for _, targets in tqdm.tqdm(test_dataloader):
+    #   # print(targets)
+    #   gt_test.extend(targets)
     
-    gt_test = np.array(gt_test)
+    # gt_test = np.array(gt_test)
     print(tensor_x_test.size())
     gt_test = torch.Tensor(gt_test).view(-1,1)
     print(gt_test.size()) 
     my_dataset = TensorDataset(tensor_x_test,gt_test) # create your datset
-    test_dataloader = DataLoader(my_dataset,batch_size=batch_size, num_workers=num_workers) 
+    test_dataloader = DataLoader(my_dataset,batch_size=128, num_workers=num_workers) 
     # acc=evaluate(NN,test_dataloader,test_loss,0,logger,tensorboard_writer,config,device)
 
     
-    X=[]
-    for f in npz_files:
-        # print(f)
-        X.append(np.load(f)['preds'])
-    X=np.concatenate(X,axis=1)
-    
     tensor_x = torch.Tensor(X)
-    gt=[]
-    for _, targets in tqdm.tqdm(labeled_dataloader):
-      gt.extend(targets)
-    # print(len(gt),len(gt[0]))
+    # gt=[]
+    # for _, targets in tqdm.tqdm(labeled_dataloader):
+    #   gt.extend(targets)
+    # # print(len(gt),len(gt[0]))
     gt = torch.Tensor(gt).view(-1,1)
-    print(X.shape);print(gt.size())
+    print(gt.size())
+    
     best_acc=0
     my_dataset = TensorDataset(tensor_x,gt) # create your datset
-    labeled_dataloader = DataLoader(my_dataset,batch_size=batch_size, num_workers=num_workers) 
+    labeled_dataloader = DataLoader(my_dataset,batch_size=128, num_workers=num_workers) 
 
     
-    for epoch in range(5):
+    for epoch in range(config.scheduler.epochs):
         
         # pred_prob_all = []
         # pred_label_all = []
